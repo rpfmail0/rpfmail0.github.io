@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
     <meta charset="utf-8">
-    <title>WebXR Billar Passthrough (Paso 27 Rev C - Logs Eventos Mando)</title> <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>WebXR Billar Passthrough (Paso 29 - Corregir Mano Taco)</title> <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
     <style>
         body { margin: 0; overflow: hidden; font-family: monospace; background-color: #000; }
         canvas { display: block; }
@@ -42,7 +42,7 @@
         let controller1, controller2;
         let cueController = null; // Mando asignado para disparar
         let cueStickMesh;
-        let isTriggerDown = false; // Flag para saber si el gatillo está pulsado
+        let isTriggerDown = false;
         let ballMaterial, cushionMaterial, tableMaterial;
         let cm_ball_ball, cm_ball_cushion, cm_ball_table;
         let score = 0;
@@ -68,7 +68,7 @@
 
         // --- Initialization ---
         function init() {
-            console.log("Iniciando escena WebXR Billar (Paso 27 Rev C)...");
+            console.log("Iniciando escena WebXR Billar (Paso 29)...");
             // ... (Setup igual que antes) ...
             scene = new THREE.Scene();
             camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 100);
@@ -131,7 +131,7 @@
 
             // --- Start Animation Loop ---
             renderer.setAnimationLoop(animate);
-            console.log("Inicialización completa. Iniciando bucle de animación (Paso 27 Rev C)...");
+            console.log("Inicialización completa. Iniciando bucle de animación (Paso 29)...");
         }
 
         // Función para superficie de mesa (visual + física)
@@ -141,20 +141,37 @@
         // --- Create Balls Function (Visual + Physics) ---
         function createBalls() { /* ... (definición completa como antes) ... */ }
 
-        // --- Setup Controllers (Con taco posicionado y LOGS) ---
+        // --- Setup Controllers (INTERCAMBIAR ASIGNACIÓN) ---
         function setupControllers() {
-            console.log("Configurando mandos...");
-            // Controller 1 (¿Derecha?)
+            console.log("Configurando mandos (INTERCAMBIANDO MANOS)...");
+
+            // ***** CAMBIO: Controller 1 (Ahora Izquierda - Línea) *****
             controller1 = renderer.xr.getController(0);
             if (controller1) {
+                 // Añadir listeners también por si acaso
                  controller1.addEventListener('selectstart', onSelectStart);
                  controller1.addEventListener('selectend', onSelectEnd);
                  scene.add(controller1);
-                 // ***** ASIGNAR controller1 como CUE *****
-                 cueController = controller1;
-                 console.log("Controller 1 asignado como cueController.");
+                 // Añadir línea visual
+                 const lineMaterial = new THREE.LineBasicMaterial({ color: 0xcccccc });
+                 const lineGeometry = new THREE.BufferGeometry().setFromPoints([ new THREE.Vector3(0, 0, 0), new THREE.Vector3(0, 0, -0.2) ]);
+                 const line1 = new THREE.Line(lineGeometry, lineMaterial);
+                 controller1.add(line1);
+                 console.log("Mando 1 (Izquierda) configurado con línea.");
+            } else { console.error("¡No se pudo obtener el Controller 1!"); }
 
-                 // Añadir taco a controller1
+
+            // ***** CAMBIO: Controller 2 (Ahora Derecha - Cue Stick) *****
+            controller2 = renderer.xr.getController(1);
+            if (controller2) {
+                 controller2.addEventListener('selectstart', onSelectStart);
+                 controller2.addEventListener('selectend', onSelectEnd);
+                 scene.add(controller2);
+                 // ***** ASIGNAR controller2 como CUE *****
+                 cueController = controller2;
+                 console.log("Controller 2 asignado como cueController.");
+
+                 // Añadir taco a controller2
                  const cueLength = 1.2;
                  const cueRadius = 0.01;
                  const cueGeometry = new THREE.CylinderGeometry(cueRadius, cueRadius * 0.8, cueLength, 16);
@@ -163,23 +180,8 @@
                  cueStickMesh.position.set(0, 0, -cueLength / 2 + 0.05);
                  cueStickMesh.rotation.set(Math.PI / 2, 0, 0);
                  cueStickMesh.castShadow = true;
-                 controller1.add(cueStickMesh);
-                 console.log("Taco añadido a Controller 1.");
-            } else { console.error("¡No se pudo obtener el Controller 1!"); }
-
-            // Controller 2 (¿Izquierda?)
-            controller2 = renderer.xr.getController(1);
-            if (controller2) {
-                 // Añadir listeners también por si acaso la mano está invertida
-                 controller2.addEventListener('selectstart', onSelectStart);
-                 controller2.addEventListener('selectend', onSelectEnd);
-                 scene.add(controller2);
-                 // Añadir línea visual
-                 const lineMaterial = new THREE.LineBasicMaterial({ color: 0xcccccc });
-                 const lineGeometry = new THREE.BufferGeometry().setFromPoints([ new THREE.Vector3(0, 0, 0), new THREE.Vector3(0, 0, -0.2) ]);
-                 const line2 = new THREE.Line(lineGeometry, lineMaterial);
-                 controller2.add(line2);
-                 console.log("Mando 2 configurado con línea.");
+                 controller2.add(cueStickMesh); // Añadir taco a Controller 2
+                 console.log("Taco añadido a Controller 2.");
             } else { console.error("¡No se pudo obtener el Controller 2!"); }
 
             console.log("Mandos configurados. cueController es:", cueController === controller1 ? "Controller 1 (índice 0)" : cueController === controller2 ? "Controller 2 (índice 1)" : "NINGUNO");
@@ -191,25 +193,23 @@
              const controller = event.target;
              console.log(`>>> Evento: selectstart detectado en ${controller === controller1 ? 'Controller 1' : controller === controller2 ? 'Controller 2' : 'Desconocido'}`); // LOG QUÉ MANDO
 
-             if (controller === cueController) {
-                 console.log("   > Es el cueController. Estableciendo isTriggerDown = true"); // LOG CONFIRMACIÓN
+             if (controller === cueController) { // Ahora debería ser controller2
+                 console.log("   > Es el cueController. Estableciendo isTriggerDown = true");
                  isTriggerDown = true;
              } else {
-                 console.log("   > NO es el cueController. Ignorando."); // LOG IGNORADO
+                 console.log("   > NO es el cueController. Ignorando.");
              }
         }
         function onSelectEnd(event) {
              const controller = event.target;
              console.log(`>>> Evento: selectend detectado en ${controller === controller1 ? 'Controller 1' : controller === controller2 ? 'Controller 2' : 'Desconocido'}`); // LOG QUÉ MANDO
 
-             // Comprobar condición para llamar a shootBall
              console.log(`   > Comprobando condición: controller === cueController (${controller === cueController}) && isTriggerDown (${isTriggerDown})`);
-             if (controller === cueController && isTriggerDown) {
-                 isTriggerDown = false; // Resetear flag PRIMERO
+             if (controller === cueController && isTriggerDown) { // Ahora debería ser controller2
+                 isTriggerDown = false;
                  console.log("   > Condición CUMPLIDA. Llamando a shootBall()...");
                  shootBall(); // Llamar a la función de disparo
              }
-             // Logs para saber por qué no se cumple la condición
              else if (controller !== cueController) {
                  console.log("   > Condición NO CUMPLIDA: El evento vino del mando incorrecto.");
              } else if (!isTriggerDown) {
@@ -218,18 +218,17 @@
         }
 
         // --- Billiards Logic Functions ---
-        // shootBall Function - CON COMPROBACIÓN isQuiet MODIFICADA (como en Paso 27)
+        // shootBall Function - CON COMPROBACIÓN isQuiet MODIFICADA
         function shootBall() {
-            console.log("--- Entrando a shootBall() ---"); // Log entrada a shootBall
+            console.log("--- Entrando a shootBall() ---");
             if (!cueBall || !cueBall.body) { console.error("Error: cueBall o cueBall.body no definido."); return; }
-            // Ya no necesitamos cueController aquí dentro si la comprobación se hace en onSelectEnd
-            // if (!cueController) { console.error("Error: cueController no definido."); return; }
+            if (!cueController) { console.error("Error: cueController no definido en shootBall."); return; } // Chequeo extra
             console.log("Estado actual: isStrokeInProgress =", isStrokeInProgress);
 
             // Comprobación de quietud MÁS PERMISIVA
             let allQuiet = true;
             const quietCheckThreshold = 0.3;
-            // console.log(`Comprobando si las bolas están quietas (Umbral Vel^2 < ${quietCheckThreshold} O Sleeping):`); // Log menos verboso
+            // console.log(`Comprobando si las bolas están quietas (Umbral Vel^2 < ${quietCheckThreshold} O Sleeping):`);
             balls.forEach((b, index) => {
                 const sleep = b.body.sleepState === CANNON.Body.SLEEPING;
                 if (sleep) { return; }
@@ -249,8 +248,7 @@
             // 1. Obtener dirección del taco (mando)
             const aimDirection = new THREE.Vector3();
             try {
-                 // Usar cueController (que debería ser controller1 ahora)
-                 cueController.getWorldDirection(aimDirection);
+                 cueController.getWorldDirection(aimDirection); // cueController ahora es controller2
                  aimDirection.y = 0;
                  aimDirection.normalize();
             } catch (e) { console.error("Error obteniendo dirección del mando:", e); return; }
@@ -299,5 +297,6 @@
     </script>
 </body>
 </html>
+
 
 
