@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
     <meta charset="utf-8">
-    <title>WebXR Billar Passthrough (Paso 29 - Corregir Mano Taco)</title> <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>WebXR Billar Passthrough (Paso 30 - Logs Detallados Creación Body)</title> <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
     <style>
         body { margin: 0; overflow: hidden; font-family: monospace; background-color: #000; }
         canvas { display: block; }
@@ -40,7 +40,7 @@
         let cueBall;
         let initialBallPositions = {};
         let controller1, controller2;
-        let cueController = null; // Mando asignado para disparar
+        let cueController = null;
         let cueStickMesh;
         let isTriggerDown = false;
         let ballMaterial, cushionMaterial, tableMaterial;
@@ -68,7 +68,7 @@
 
         // --- Initialization ---
         function init() {
-            console.log("Iniciando escena WebXR Billar (Paso 29)...");
+            console.log("Iniciando escena WebXR Billar (Paso 30)...");
             // ... (Setup igual que antes) ...
             scene = new THREE.Scene();
             camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 100);
@@ -121,7 +121,7 @@
             createCushionsAndFrame();
 
             // --- Create Balls (Visuals + Physics) ---
-            createBalls();
+            createBalls(); // Llamar a la función con logs internos
 
             // --- Setup Controllers ---
             setupControllers(); // Asigna cueController aquí
@@ -131,47 +131,106 @@
 
             // --- Start Animation Loop ---
             renderer.setAnimationLoop(animate);
-            console.log("Inicialización completa. Iniciando bucle de animación (Paso 29)...");
+            console.log("Inicialización completa. Iniciando bucle de animación (Paso 30)...");
         }
 
         // Función para superficie de mesa (visual + física)
         function createTableSurface() { /* ... (definición completa como antes) ... */ }
         // Función para cojines/marco (visual + física)
         function createCushionsAndFrame() { /* ... (definición completa como antes) ... */ }
-        // --- Create Balls Function (Visual + Physics) ---
-        function createBalls() { /* ... (definición completa como antes) ... */ }
 
-        // --- Setup Controllers (INTERCAMBIAR ASIGNACIÓN) ---
-        function setupControllers() {
+        // --- Create Balls Function (Visual + Physics) con LOGS DETALLADOS ---
+        function createBalls() {
+             const sphereGeometry = new THREE.SphereGeometry(ballRadius, 32, 32);
+             const damping = 0.15;
+             const ballYPos = ballRadius;
+             const ballData = [
+                 { name: 'white', color: 0xffffff, x: 0, z: tableHeight * 0.25 },
+                 { name: 'yellow', color: 0xffff00, x: tableWidth * 0.2, z: -tableHeight * 0.25 },
+                 { name: 'red', color: 0xff0000, x: -tableWidth * 0.2, z: -tableHeight * 0.25 }
+             ];
+             balls.length = 0;
+             initialBallPositions = {};
+             console.log("--- Entrando a createBalls() ---");
+             ballData.forEach(data => {
+                 console.log(` > Procesando bola: ${data.name}`);
+                 const material = new THREE.MeshStandardMaterial({ color: data.color, roughness: 0.1, metalness: 0.1 });
+                 const mesh = new THREE.Mesh(sphereGeometry, material);
+                 mesh.position.set(data.x, ballYPos, data.z);
+                 mesh.castShadow = true;
+                 tableGroup.add(mesh);
+                 let body = null; // Declarar body fuera del try para que exista en ballInfo
+                 try {
+                     const shape = new CANNON.Sphere(ballRadius);
+                     // ***** LOG ANTES DE CREAR BODY *****
+                     console.log(` > > Intentando crear CANNON.Body para ${data.name}...`);
+                     body = new CANNON.Body({ mass: ballMass, material: ballMaterial, shape: shape, linearDamping: damping, angularDamping: damping, allowSleep: true, sleepSpeedLimit: 0.1, sleepTimeLimit: 1.0 });
+                     // ***** LOG DESPUÉS DE CREAR BODY *****
+                     console.log(` > > CANNON.Body creado para ${data.name}:`, body ? 'OK' : 'FALLÓ'); // Log simple si se creó o no
+
+                     if(body){ // Solo continuar si el body se creó
+                         const worldPos = tableGroup.localToWorld(mesh.position.clone());
+                         body.position.copy(worldPos);
+                         body.addEventListener('collide', onCollision);
+                         // ***** LOG ANTES DE AÑADIR BODY *****
+                         console.log(` > > Intentando añadir body de ${data.name} al mundo...`);
+                         world.addBody(body);
+                         // ***** LOG DESPUÉS DE AÑADIR BODY *****
+                         console.log(` > > Body de ${data.name} añadido al mundo.`);
+                     }
+
+                     // Crear ballInfo DESPUÉS de intentar crear/añadir el body
+                     const ballInfo = { mesh: mesh, body: body, name: data.name };
+                     // ***** LOG ANTES DE PUSH *****
+                     console.log(` > > ballInfo a punto de hacer push para ${data.name}:`, ballInfo);
+                     balls.push(ballInfo);
+
+                     if (data.name === 'white') {
+                         console.log(` > > Asignando cueBall para ${data.name}...`);
+                         cueBall = ballInfo; // Asignación
+                         console.log(' > > cueBall asignada:', cueBall); // Verificar valor justo después
+                     }
+                     initialBallPositions[data.name] = { mesh: mesh.position.clone(), body: body ? body.position.clone() : null }; // Guardar null si body falló
+
+                 } catch (e) {
+                     // ***** LOG EN CASO DE ERROR *****
+                     console.error(` > > ERROR CATASTRÓFICO creando/añadiendo cuerpo físico para ${data.name}:`, e);
+                     // Asegurarse de que ballInfo se añada con body=null si hay error
+                     const ballInfo = { mesh: mesh, body: null, name: data.name };
+                     console.log(` > > ballInfo con body=null por error para ${data.name}:`, ballInfo);
+                     balls.push(ballInfo);
+                     if (data.name === 'white') {
+                         console.log(` > > Asignando cueBall (con body=null por error) para ${data.name}...`);
+                         cueBall = ballInfo;
+                     }
+                     initialBallPositions[data.name] = { mesh: mesh.position.clone(), body: null };
+                 }
+             });
+             console.log("--- Saliendo de createBalls() ---");
+        }
+        // --- Setup Controllers (Con taco posicionado) ---
+        function setupControllers() { /* ... (definición completa como antes, asignando cueController=controller2) ... */
             console.log("Configurando mandos (INTERCAMBIANDO MANOS)...");
-
-            // ***** CAMBIO: Controller 1 (Ahora Izquierda - Línea) *****
-            controller1 = renderer.xr.getController(0);
+            controller1 = renderer.xr.getController(0); // Izquierda
             if (controller1) {
-                 // Añadir listeners también por si acaso
                  controller1.addEventListener('selectstart', onSelectStart);
                  controller1.addEventListener('selectend', onSelectEnd);
                  scene.add(controller1);
-                 // Añadir línea visual
                  const lineMaterial = new THREE.LineBasicMaterial({ color: 0xcccccc });
                  const lineGeometry = new THREE.BufferGeometry().setFromPoints([ new THREE.Vector3(0, 0, 0), new THREE.Vector3(0, 0, -0.2) ]);
                  const line1 = new THREE.Line(lineGeometry, lineMaterial);
                  controller1.add(line1);
-                 console.log("Mando 1 (Izquierda) configurado con línea.");
+                 // console.log("Mando 1 (Izquierda) configurado con línea.");
             } else { console.error("¡No se pudo obtener el Controller 1!"); }
 
-
-            // ***** CAMBIO: Controller 2 (Ahora Derecha - Cue Stick) *****
-            controller2 = renderer.xr.getController(1);
+            controller2 = renderer.xr.getController(1); // Derecha
             if (controller2) {
                  controller2.addEventListener('selectstart', onSelectStart);
                  controller2.addEventListener('selectend', onSelectEnd);
                  scene.add(controller2);
-                 // ***** ASIGNAR controller2 como CUE *****
-                 cueController = controller2;
-                 console.log("Controller 2 asignado como cueController.");
+                 cueController = controller2; // Asignar controller2 como CUE
+                 // console.log("Controller 2 asignado como cueController.");
 
-                 // Añadir taco a controller2
                  const cueLength = 1.2;
                  const cueRadius = 0.01;
                  const cueGeometry = new THREE.CylinderGeometry(cueRadius, cueRadius * 0.8, cueLength, 16);
@@ -180,63 +239,43 @@
                  cueStickMesh.position.set(0, 0, -cueLength / 2 + 0.05);
                  cueStickMesh.rotation.set(Math.PI / 2, 0, 0);
                  cueStickMesh.castShadow = true;
-                 controller2.add(cueStickMesh); // Añadir taco a Controller 2
-                 console.log("Taco añadido a Controller 2.");
+                 controller2.add(cueStickMesh);
+                 // console.log("Taco añadido a Controller 2.");
             } else { console.error("¡No se pudo obtener el Controller 2!"); }
-
             console.log("Mandos configurados. cueController es:", cueController === controller1 ? "Controller 1 (índice 0)" : cueController === controller2 ? "Controller 2 (índice 1)" : "NINGUNO");
         }
 
 
         // --- WebXR Event Handlers con LOGS ---
-        function onSelectStart(event) {
-             const controller = event.target;
-             console.log(`>>> Evento: selectstart detectado en ${controller === controller1 ? 'Controller 1' : controller === controller2 ? 'Controller 2' : 'Desconocido'}`); // LOG QUÉ MANDO
-
-             if (controller === cueController) { // Ahora debería ser controller2
-                 console.log("   > Es el cueController. Estableciendo isTriggerDown = true");
-                 isTriggerDown = true;
-             } else {
-                 console.log("   > NO es el cueController. Ignorando.");
-             }
-        }
-        function onSelectEnd(event) {
-             const controller = event.target;
-             console.log(`>>> Evento: selectend detectado en ${controller === controller1 ? 'Controller 1' : controller === controller2 ? 'Controller 2' : 'Desconocido'}`); // LOG QUÉ MANDO
-
-             console.log(`   > Comprobando condición: controller === cueController (${controller === cueController}) && isTriggerDown (${isTriggerDown})`);
-             if (controller === cueController && isTriggerDown) { // Ahora debería ser controller2
-                 isTriggerDown = false;
-                 console.log("   > Condición CUMPLIDA. Llamando a shootBall()...");
-                 shootBall(); // Llamar a la función de disparo
-             }
-             else if (controller !== cueController) {
-                 console.log("   > Condición NO CUMPLIDA: El evento vino del mando incorrecto.");
-             } else if (!isTriggerDown) {
-                  console.log("   > Condición NO CUMPLIDA: El trigger no estaba pulsado (isTriggerDown=false).");
-             }
-        }
+        function onSelectStart(event) { /* ... (definición completa como antes) ... */ }
+        function onSelectEnd(event) { /* ... (definición completa como antes) ... */ }
 
         // --- Billiards Logic Functions ---
-        // shootBall Function - CON COMPROBACIÓN isQuiet MODIFICADA
+        // shootBall Function - CON COMPROBACIÓN isQuiet MODIFICADA y try-catch en applyImpulse
         function shootBall() {
             console.log("--- Entrando a shootBall() ---");
-            if (!cueBall || !cueBall.body) { console.error("Error: cueBall o cueBall.body no definido."); return; }
-            if (!cueController) { console.error("Error: cueController no definido en shootBall."); return; } // Chequeo extra
+            // ***** CHEQUEO MÁS ROBUSTO *****
+            if (!cueBall || !cueBall.body) {
+                console.error("Error: cueBall o cueBall.body NO ESTÁ DEFINIDO al intentar disparar.");
+                console.error("Valor actual de cueBall:", cueBall); // Loguear el objeto cueBall entero
+                return;
+            }
+            if (!cueController) { console.error("Error: cueController no definido en shootBall."); return; }
             console.log("Estado actual: isStrokeInProgress =", isStrokeInProgress);
 
             // Comprobación de quietud MÁS PERMISIVA
             let allQuiet = true;
             const quietCheckThreshold = 0.3;
-            // console.log(`Comprobando si las bolas están quietas (Umbral Vel^2 < ${quietCheckThreshold} O Sleeping):`);
             balls.forEach((b, index) => {
+                // Añadir chequeo extra por si algún body es null inesperadamente
+                if (!b || !b.body) {
+                    console.warn(`Advertencia: Falta body para bola ${index} en chequeo isQuiet.`);
+                    return; // Saltar esta bola
+                }
                 const sleep = b.body.sleepState === CANNON.Body.SLEEPING;
                 if (sleep) { return; }
                 const vel = b.body.velocity.lengthSquared();
-                if (vel > quietCheckThreshold) {
-                    // console.log(` > Bola ${index} AÚN SE MUEVE (Vel^2 = ${vel.toFixed(4)})`);
-                    allQuiet = false;
-                }
+                if (vel > quietCheckThreshold) { allQuiet = false; }
             });
             console.log("Resultado de isQuiet (Umbral Relajado):", allQuiet);
 
@@ -248,7 +287,7 @@
             // 1. Obtener dirección del taco (mando)
             const aimDirection = new THREE.Vector3();
             try {
-                 cueController.getWorldDirection(aimDirection); // cueController ahora es controller2
+                 cueController.getWorldDirection(aimDirection);
                  aimDirection.y = 0;
                  aimDirection.normalize();
             } catch (e) { console.error("Error obteniendo dirección del mando:", e); return; }
@@ -260,11 +299,16 @@
             // 4. Aplicar Impulso
             const impulse = new CANNON.Vec3( aimDirection.x * impulseMagnitude, 0, aimDirection.z * impulseMagnitude );
             console.log("Aplicando impulso:", impulse);
+            // ***** TRY-CATCH AÑADIDO *****
             try {
                 cueBall.body.wakeUp();
                 cueBall.body.applyImpulse(impulse, hitOffset);
                 console.log("Impulso aplicado a cueBall.body.");
-            } catch(e) { console.error("¡Error al aplicar impulso!", e); return; }
+            } catch(e) {
+                console.error("¡Error al aplicar impulso!", e);
+                console.error("Estado de cueBall.body en el error:", cueBall.body); // Loguear el body si falla
+                return; // Salir si falla
+            }
 
             // 5. Iniciar seguimiento del tiro
             isStrokeInProgress = true;
@@ -297,6 +341,7 @@
     </script>
 </body>
 </html>
+
 
 
 
