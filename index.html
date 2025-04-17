@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
     <meta charset="utf-8">
-    <title>WebXR Billar Passthrough (Paso 32 - Crear Cuerpos, Sin Añadir)</title> <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>WebXR Billar Passthrough (Paso 33 - Test Bola + Mandos)</title> <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
     <style>
         body { margin: 0; overflow: hidden; font-family: monospace; background-color: #000; }
         canvas { display: block; }
@@ -14,7 +14,6 @@
         }
     </style>
 
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/cannon.js/0.6.2/cannon.min.js"></script>
     <script type="importmap">
         {
             "imports": {
@@ -29,49 +28,30 @@
         import * as THREE from 'three';
         import { ARButton } from 'three/addons/webxr/ARButton.js';
 
-        // --- Global Variables ---
-        // ... (igual que antes) ...
+        // --- Global Variables (Minimal + Controllers) ---
         let camera, scene, renderer;
-        let world;
-        const timeStep = 1 / 60;
-        const tableParts = [];
-        let tableGroup;
-        const balls = [];
-        let cueBall;
-        let initialBallPositions = {};
+        let tableGroup; // Contenedor invisible (solo para la bola)
+
+        // WebXR Controller Variables
         let controller1, controller2;
-        let cueController = null;
-        let cueStickMesh;
+        let cueController = null; // Se asignará al controller2
+        let cueStickMesh; // Visual del taco
         let isTriggerDown = false;
-        let ballMaterial, cushionMaterial, tableMaterial;
-        let cm_ball_ball, cm_ball_cushion, cm_ball_table; // Definidos pero no usados aún
-        let score = 0;
-        let isStrokeInProgress = false;
-        let hitYellowAfterStrokeStart = false;
-        let hitRedAfterStrokeStart = false;
-        let cushionHitsThisStroke = 0;
-        const stopVelocityThreshold = 0.01;
 
         // Constants
-        // ... (igual que antes) ...
         const ballRadius = 0.03075;
-        const ballMass = 0.21;
-        const tableWidth = 1.42;
-        const tableHeight = 2.84;
-        const tableThickness = 0.01;
-        const cushionHeight = 0.05;
-        const cushionWidth = 0.05;
+        // Altura teórica donde estaría la superficie de la mesa
         const tableSurfaceY = -0.4;
-
 
         init();
 
-        // --- Initialization ---
+        // --- Initialization (Minimal + Controllers) ---
         function init() {
-            console.log("Iniciando escena WebXR Billar (Paso 32)...");
-            // ... (Setup igual que antes) ...
+            console.log("Iniciando escena WebXR Billar (Paso 33: Test Bola + Mandos)...");
+
             scene = new THREE.Scene();
             camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 100);
+            // Posicionar cámara relativa a donde estaría la mesa
             camera.position.set(0, tableSurfaceY + 1.5, 1);
 
             renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
@@ -79,207 +59,134 @@
             renderer.setPixelRatio(window.devicePixelRatio);
             renderer.setClearAlpha(0);
             renderer.xr.enabled = true;
-            renderer.shadowMap.enabled = true;
+            // Sombras no necesarias con MeshBasicMaterial
+            // renderer.shadowMap.enabled = true;
             document.body.appendChild(renderer.domElement);
 
             const arButton = ARButton.createButton(renderer);
             document.body.appendChild(arButton);
+            console.log("AR Button creado.");
 
-            scene.add(new THREE.AmbientLight(0xAAAAAA));
-            const spotLight = new THREE.SpotLight(0xffffff, 0.9, 0, Math.PI / 4, 1);
-            spotLight.position.set(0, tableSurfaceY + 2, -1.5);
-            spotLight.castShadow = true;
-            spotLight.shadow.mapSize.width = 1024;
-            spotLight.shadow.mapSize.height = 1024;
-            scene.add(spotLight);
+            // Iluminación mínima
+            scene.add(new THREE.AmbientLight(0xFFFFFF, 1.0));
             scene.add(camera);
 
-            // --- Physics World (Cannon.js) ---
-            if (typeof CANNON === 'undefined') { console.error("Cannon.js no cargado!"); return; }
-            world = new CANNON.World();
-            world.gravity.set(0, -9.82, 0); // Gravedad definida pero no se usará aún
-            world.broadphase = new CANNON.SAPBroadphase(world);
-            world.allowSleep = true;
-            world.solver.iterations = 15;
-            console.log("Mundo físico Cannon.js creado.");
-
-            // Physics Materials Setup
-            ballMaterial = new CANNON.Material('ball');
-            cushionMaterial = new CANNON.Material('cushion');
-            tableMaterial = new CANNON.Material('table');
-            console.log("Materiales físicos creados.");
-            // Contact Materials (definidos pero no añadidos a world aún)
-            cm_ball_ball = new CANNON.ContactMaterial(ballMaterial, ballMaterial, { friction: 0.1, restitution: 0.9 });
-            cm_ball_cushion = new CANNON.ContactMaterial(ballMaterial, cushionMaterial, { friction: 0.15, restitution: 0.7 });
-            cm_ball_table = new CANNON.ContactMaterial(ballMaterial, tableMaterial, { friction: 0.04, restitution: 0.2 });
-            // world.addContactMaterial(...) // No añadir aún
-
-            // --- Create Billiards Table (Visuals + Physics Body Creation ONLY) ---
+            // --- Crear SOLO el grupo contenedor (para la bola) ---
             tableGroup = new THREE.Group();
-            tableGroup.position.set(0, tableSurfaceY, -1.5);
+            tableGroup.position.set(0, tableSurfaceY, -1.5); // Posicionar el grupo
             scene.add(tableGroup);
-            createTableSurface(); // Crea visual y cuerpo físico, pero NO lo añade a world
-            createCushionsAndFrame(); // Crea visual y cuerpos físicos, pero NO los añade a world
+            console.log("Table group creado en Y:", tableSurfaceY);
 
-            // --- Create Balls (Visuals + Physics Body Creation ONLY) ---
-            createBalls(); // Crea visual y cuerpos físicos, pero NO los añade a world
+            // --- Crear SOLO UNA BOLA VISUAL ---
+            createSingleBallVisualOnly(tableGroup);
 
-            // --- Setup Controllers ---
-            setupControllers(); // Configura mandos visualmente
+            // --- Configurar Mandos ---
+            setupControllers(); // Añadir configuración de mandos y taco visual simplificado
+
+            // --- NO crear superficie, cojines, física, etc. ---
 
             // --- Event Listeners ---
             window.addEventListener('resize', onWindowResize, false);
 
             // --- Start Animation Loop ---
-            renderer.setAnimationLoop(animate); // animate ahora está simplificado
-            console.log("Inicialización completa (Paso 32 - Cuerpos Creados, No Añadidos)...");
+            renderer.setAnimationLoop(animate);
+            console.log("Inicialización mínima con bola y mandos completa (Paso 33).");
         }
 
-        // --- Función para crear superficie (Visual + Física SIN AÑADIR) ---
-        function createTableSurface() {
-             console.log("Creando superficie (Visual + Cuerpo Físico)...");
-             const tableGeometry = new THREE.BoxGeometry(tableWidth, tableThickness, tableHeight);
-             const tableMeshMaterial = new THREE.MeshStandardMaterial({ color: 0x006400, roughness: 0.9 });
-             const tableSurfaceMesh = new THREE.Mesh(tableGeometry, tableMeshMaterial);
-             tableSurfaceMesh.name = "TableSurface";
-             tableSurfaceMesh.position.y = -tableThickness / 2;
-             tableSurfaceMesh.receiveShadow = true;
-             tableGroup.add(tableSurfaceMesh);
 
-             const tableShape = new CANNON.Box(new CANNON.Vec3(tableWidth / 2, tableThickness / 2, tableHeight / 2));
-             const tableBody = new CANNON.Body({ mass: 0, material: tableMaterial });
-             tableBody.addShape(tableShape);
-             const tableBodyWorldPos = tableGroup.localToWorld(tableSurfaceMesh.position.clone());
-             tableBody.position.copy(tableBodyWorldPos);
-             tableBody.quaternion.copy(tableGroup.quaternion);
-             // ***** CAMBIO: NO AÑADIR AL MUNDO *****
-             // world.addBody(tableBody);
-             console.log(" > Cuerpo físico de superficie CREADO (NO añadido a world).");
-             tableParts.push({ mesh: tableSurfaceMesh, body: tableBody, type: 'table' });
-         }
-
-
-        // --- Función para crear cojines y marco (Visual + Física SIN AÑADIR) ---
-        function createCushionsAndFrame() {
-            console.log("Creando visuales y cuerpos físicos de cojines/marco...");
-            const cushionYPos = cushionHeight / 2;
-            const woodMaterial = new THREE.MeshStandardMaterial({ color: 0x8B4513, roughness: 0.7 });
-            const cushionGeometryLong = new THREE.BoxGeometry(tableWidth + 2 * cushionWidth, cushionHeight, cushionWidth);
-            const cushionGeometryShort = new THREE.BoxGeometry(cushionWidth, cushionHeight, tableHeight);
-            const cushionPositions = [ /* ... */ ]; // Igual que antes
-
-            cushionPositions.forEach((posData, index) => {
-                 try {
-                     const cushionMesh = new THREE.Mesh(posData.geometry, woodMaterial);
-                     cushionMesh.position.set(posData.x, posData.y, posData.z);
-                     cushionMesh.castShadow = true;
-                     cushionMesh.receiveShadow = true;
-                     tableGroup.add(cushionMesh);
-
-                     const cannonVec = new CANNON.Vec3(posData.geometry.parameters.width / 2, posData.geometry.parameters.height / 2, posData.geometry.parameters.depth / 2);
-                     const cushionShape = new CANNON.Box(cannonVec);
-                     const cushionBody = new CANNON.Body({ mass: 0, material: cushionMaterial });
-                     cushionBody.addShape(cushionShape);
-                     const worldPos = tableGroup.localToWorld(cushionMesh.position.clone());
-                     cushionBody.position.copy(worldPos);
-                     cushionBody.quaternion.copy(tableGroup.quaternion);
-                     // ***** CAMBIO: NO AÑADIR AL MUNDO *****
-                     // world.addBody(cushionBody);
-                     tableParts.push({ mesh: cushionMesh, body: cushionBody, type: 'cushion' });
-                 } catch(e) { console.error(`Error creando cojín ${index+1}:`, e); }
-            });
-             console.log(" > Cuerpos físicos de cojines CREADOS (NO añadidos a world).");
-
-            // Base visual (sin física)
-            try {
-                 const baseHeight = 0.15;
-                 const baseGeometry = new THREE.BoxGeometry(tableWidth + 2 * cushionWidth + 0.1, baseHeight, tableHeight + 2 * cushionWidth + 0.1);
-                 const baseMesh = new THREE.Mesh(baseGeometry, woodMaterial);
-                 baseMesh.position.y = -tableThickness - baseHeight / 2;
-                 baseMesh.castShadow = true;
-                 baseMesh.receiveShadow = true;
-                 tableGroup.add(baseMesh);
-            } catch(e) { console.error("Error creando base visual:", e); }
-            console.log("Marco/Bandas visuales añadidos.");
+        // --- Función para crear solo una bola visual ---
+        function createSingleBallVisualOnly(group) {
+            console.log("Intentando crear una única bola visual...");
+            const sphereGeometry = new THREE.SphereGeometry(ballRadius, 32, 32);
+            // Usar material básico muy visible
+            const material = new THREE.MeshBasicMaterial({ color: 0xffffff }); // Blanco brillante
+            const mesh = new THREE.Mesh(sphereGeometry, material);
+            const ballYPos = ballRadius; // Posición Y local sobre la superficie teórica
+            mesh.position.set(0, ballYPos, 0); // En el centro X,Z del grupo
+            console.log(` > Malla de bola creada en pos local Y: ${mesh.position.y.toFixed(4)}`);
+            group.add(mesh); // Añadir malla al grupo
+            console.log(" > Malla de bola añadida al tableGroup.");
         }
 
-        // --- Create Balls Function (Visual + Física SIN AÑADIR) ---
-        function createBalls() {
-             const sphereGeometry = new THREE.SphereGeometry(ballRadius, 32, 32);
-             const damping = 0.15;
-             const ballYPos = ballRadius;
-             const ballData = [ /* ... */ ]; // Igual que antes
-             balls.length = 0;
-             initialBallPositions = {};
-             console.log("Creando bolas (Visual + Cuerpo Físico)...");
-             ballData.forEach(data => {
-                 const material = new THREE.MeshStandardMaterial({ color: data.color, roughness: 0.1, metalness: 0.1 });
-                 const mesh = new THREE.Mesh(sphereGeometry, material);
-                 mesh.position.set(data.x, ballYPos, data.z);
-                 mesh.castShadow = true;
-                 tableGroup.add(mesh);
-                 let body = null;
-                 try {
-                     const shape = new CANNON.Sphere(ballRadius);
-                     body = new CANNON.Body({ mass: ballMass, material: ballMaterial, shape: shape, linearDamping: damping, angularDamping: damping, allowSleep: true, sleepSpeedLimit: 0.1, sleepTimeLimit: 1.0 });
-                     const worldPos = tableGroup.localToWorld(mesh.position.clone());
-                     body.position.copy(worldPos);
-                     // body.addEventListener('collide', onCollision); // No añadir listener si no está en world
-                     // ***** CAMBIO: NO AÑADIR AL MUNDO *****
-                     // world.addBody(body);
-                     console.log(` > Cuerpo físico de ${data.name} CREADO (NO añadido a world).`);
+        // --- Setup Controllers (Taco en origen de Controller 2) ---
+        function setupControllers() {
+            console.log("Configurando mandos (Taco en Controller 2)...");
 
-                 } catch (e) { console.error(`Error creando cuerpo físico para ${data.name}:`, e); }
+            // Controller 1 (Izquierda - Línea)
+            controller1 = renderer.xr.getController(0);
+            if (controller1) {
+                 // Añadir listeners por si acaso
+                 controller1.addEventListener('selectstart', onSelectStart);
+                 controller1.addEventListener('selectend', onSelectEnd);
+                 scene.add(controller1);
+                 // Añadir línea visual
+                 const lineMaterial = new THREE.LineBasicMaterial({ color: 0xcccccc });
+                 const lineGeometry = new THREE.BufferGeometry().setFromPoints([ new THREE.Vector3(0, 0, 0), new THREE.Vector3(0, 0, -0.2) ]);
+                 const line1 = new THREE.Line(lineGeometry, lineMaterial);
+                 controller1.add(line1);
+                 console.log("Mando 1 (Izquierda) configurado con línea.");
+            } else { console.error("¡No se pudo obtener el Controller 1!"); }
 
-                 // Guardar referencia aunque body sea null o no esté en world
-                 const ballInfo = { mesh: mesh, body: body, name: data.name };
-                 balls.push(ballInfo);
-                 if (data.name === 'white') { cueBall = ballInfo; }
-                 initialBallPositions[data.name] = { mesh: mesh.position.clone(), body: body ? body.position.clone() : null };
 
-             });
-             console.log("Creación de bolas (visual + cuerpo físico) completa.");
+            // Controller 2 (Derecha - Cue Stick + Debug Sphere)
+            controller2 = renderer.xr.getController(1);
+            if (controller2) {
+                 controller2.addEventListener('selectstart', onSelectStart);
+                 controller2.addEventListener('selectend', onSelectEnd);
+                 scene.add(controller2);
+                 cueController = controller2; // Asignar como mando del taco
+                 console.log("Controller 2 asignado como cueController.");
+
+                 // Taco (material básico, en origen)
+                 const cueLength = 1.2;
+                 const cueRadius = 0.01;
+                 const cueGeometry = new THREE.CylinderGeometry(cueRadius, cueRadius * 0.8, cueLength, 16);
+                 const cueMaterial = new THREE.MeshBasicMaterial({ color: 0xdeb887 }); // Color madera básico
+                 cueStickMesh = new THREE.Mesh(cueGeometry, cueMaterial);
+                 // ** Añadir taco en el origen del mando SIN rotación/offset **
+                 console.log("Añadiendo taco (básico) al origen del mando 2...");
+                 controller2.add(cueStickMesh);
+                 console.log("Taco añadido.");
+
+                 // Esfera roja de debug
+                 const debugSphereGeo = new THREE.SphereGeometry(0.03, 16, 16);
+                 const debugSphereMat = new THREE.MeshBasicMaterial({ color: 0xff0000 }); // Rojo brillante
+                 const debugSphere = new THREE.Mesh(debugSphereGeo, debugSphereMat);
+                 console.log("Añadiendo esfera roja de debug al mando 2...");
+                 controller2.add(debugSphere);
+                 console.log("Esfera roja de debug añadida.");
+
+            } else { console.error("¡No se pudo obtener el Controller 2!"); }
+
+            console.log("Mandos configurados. cueController es:", cueController === controller1 ? "Controller 1 (índice 0)" : cueController === controller2 ? "Controller 2 (índice 1)" : "NINGUNO");
         }
 
-        // --- Setup Controllers (Con taco posicionado) ---
-        function setupControllers() { /* ... (definición completa como antes, asignando cueController=controller2) ... */ }
 
+        // --- WebXR Event Handlers (Vacíos por ahora) ---
+        function onSelectStart(event) {
+             const controller = event.target;
+             if (controller === cueController) { isTriggerDown = true; }
+        }
+        function onSelectEnd(event) {
+             const controller = event.target;
+             if (controller === cueController && isTriggerDown) { isTriggerDown = false; }
+        }
 
-        // --- WebXR Event Handlers (No hacen nada relevante ahora) ---
-        function onSelectStart(event) { /* ... */ }
-        function onSelectEnd(event) { /* ... */ }
-
-        // --- Billiards Logic Functions ---
-        function shootBall() { /* ... (definición completa como antes, pero no se llama) ... */ }
-        function onCollision(event) { /* ... */ }
-        function resetBall(ball) { /* ... */ }
-        function checkBallsFallen() { /* ... */ }
-        function checkStrokeEnd() { /* ... */ }
-
+        // --- Otras funciones comentadas o eliminadas ---
+        // function createTableSurfaceVisualOnly() { /* ... */ }
+        // function createCushionsAndFrameVisualsOnly() { /* ... */ }
+        // function shootBall() { /* ... */ }
 
         // --- Window Resize Handler ---
-        function onWindowResize() { /* ... */ }
+        function onWindowResize() {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        }
 
-        // --- Animation Loop (SIMPLIFICADO) ---
+        // --- Animation Loop (Minimal) ---
         function animate() {
-            // ***** world.step() COMENTADO *****
-            /*
-            if (world) {
-                try { world.step(timeStep); } catch (e) { console.error("Error during world.step():", e); }
-            }
-            */
-
-            // ***** Sincronización COMENTADA *****
-            /*
-            balls.forEach(ball => { ... });
-            */
-
-            // ***** Checks de estado COMENTADOS *****
-            /*
-            try { checkBallsFallen(); checkStrokeEnd(); } catch (e) { ... }
-            */
-
-            // Render Scene - ÚNICA ACCIÓN ACTIVA
+            // Render Scene
             try {
                  renderer.render(scene, camera);
             } catch (e) {
@@ -288,15 +195,14 @@
         }
 
         // --- Copiar aquí las definiciones completas de las funciones auxiliares ---
-        // (createTableSurface, createCushionsAndFrame, createBalls, setupControllers,
-        //  onSelectStart, onSelectEnd, onCollision, resetBall, checkBallsFallen,
-        //  checkStrokeEnd, onWindowResize, shootBall, animate)
+        // (createSingleBallVisualOnly, setupControllers, onSelectStart, onSelectEnd, onWindowResize)
         // Asegúrate de que las definiciones completas de las funciones estén presentes.
-
 
     </script>
 </body>
 </html>
+
+
 
 
 
