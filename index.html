@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
     <meta charset="utf-8">
-    <title>WebXR Billar Passthrough (Paso 39 - AddBody Superficie+Bandas)</title> <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>WebXR Billar Passthrough (Paso 40 - Crear Cuerpos Bandas)</title> <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
     <style>
         body { margin: 0; overflow: hidden; font-family: monospace; background-color: #000; }
         canvas { display: block; }
@@ -33,12 +33,11 @@
         let camera, scene, renderer;
         let tableGroup; // Contenedor
 
-        // ***** REINTRODUCIDO: Variables de Física (Mínimas) *****
+        // Física (Mínima + Material Cojín)
         let world;
-        const timeStep = 1 / 60; // Definido pero no usado
-        const tableParts = []; // Para referencias
-        // ***** REINTRODUCIDO: Material cojín *****
-        let tableMaterial, cushionMaterial;
+        const timeStep = 1 / 60;
+        const tableParts = [];
+        let tableMaterial, cushionMaterial; // Añadir cushionMaterial
 
         // WebXR Controller Variables
         let controller1, controller2;
@@ -47,19 +46,19 @@
         let isTriggerDown = false;
 
         // Constants
-        const ballRadius = 0.03075; // Necesario para bola visual
+        const ballRadius = 0.03075;
         const tableWidth = 1.42;
         const tableHeight = 2.84;
         const tableThickness = 0.01;
         const cushionHeight = 0.05;
         const cushionWidth = 0.05;
-        const tableSurfaceY = -0.4; // Altura superficie
+        const tableSurfaceY = -0.4;
 
         init();
 
         // --- Initialization ---
         function init() {
-            console.log("Iniciando escena WebXR Billar (Paso 39)...");
+            console.log("Iniciando escena WebXR Billar (Paso 40)...");
 
             scene = new THREE.Scene();
             camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 100);
@@ -70,7 +69,7 @@
             renderer.setPixelRatio(window.devicePixelRatio);
             renderer.setClearAlpha(0);
             renderer.xr.enabled = true;
-            renderer.shadowMap.enabled = true; // Mantener sombras
+            renderer.shadowMap.enabled = true;
             document.body.appendChild(renderer.domElement);
 
             const arButton = ARButton.createButton(renderer);
@@ -96,19 +95,18 @@
             tableMaterial = new CANNON.Material('table');
             cushionMaterial = new CANNON.Material('cushion'); // Añadir material cojín
             console.log("Materiales físicos (estáticos) creados.");
-            // No ContactMaterials aún
 
             // --- Crear Grupo y Visuales de la Mesa ---
             tableGroup = new THREE.Group();
-            tableGroup.position.set(0, tableSurfaceY, -1.5); // Posicionar el grupo
+            tableGroup.position.set(0, tableSurfaceY, -1.5);
             scene.add(tableGroup);
             console.log("Table group creado en Y:", tableSurfaceY);
 
-            // --- Crear Superficie (Visual + Física Estática AÑADIDA) ---
+            // --- Crear Superficie (Visual + Física AÑADIDA) ---
             createTableSurface(); // Añade tableBody a world
 
-            // --- Crear Cojines y Marco (Visual + Física Estática AÑADIDA) ---
-            createCushionsAndFrame(); // Ahora añade cushionBody a world
+            // --- Crear Cojines y Marco (Visual + Física CREADA pero NO AÑADIDA) ---
+            createCushionsAndFrame(); // Ahora NO añade cushionBody a world
 
             // --- Crear SOLO UNA BOLA VISUAL (Sin física) ---
             createSingleBallVisualOnly(tableGroup);
@@ -121,7 +119,7 @@
 
             // --- Start Animation Loop ---
             renderer.setAnimationLoop(animate); // animate simplificado
-            console.log("Inicialización con física de superficie+bandas completa (Paso 39).");
+            console.log("Inicialización completa (Paso 40).");
         }
 
         // --- Función para crear superficie (Visual + Física AÑADIDA a World) ---
@@ -151,9 +149,9 @@
          }
 
 
-        // --- Función para crear cojines y marco (Visual + Física AÑADIDA a World) ---
+        // --- Función para crear cojines y marco (Visual + Física CREADA pero NO AÑADIDA) ---
         function createCushionsAndFrame() {
-            console.log("Creando visuales y física estática de cojines/marco...");
+            console.log("Creando visuales y cuerpos físicos (SIN AÑADIR) de cojines/marco...");
             const cushionYPos = cushionHeight / 2;
             const woodMaterial = new THREE.MeshStandardMaterial({ color: 0x8B4513, roughness: 0.7 });
             const cushionGeometryLong = new THREE.BoxGeometry(tableWidth + 2 * cushionWidth, cushionHeight, cushionWidth);
@@ -174,7 +172,7 @@
                      cushionMesh.receiveShadow = true;
                      tableGroup.add(cushionMesh);
 
-                     // ***** Física Estática - REINTRODUCIDA *****
+                     // Física Estática (CREADA pero NO AÑADIDA)
                      const cannonVec = new CANNON.Vec3(posData.geometry.parameters.width / 2, posData.geometry.parameters.height / 2, posData.geometry.parameters.depth / 2);
                      const cushionShape = new CANNON.Box(cannonVec);
                      const cushionBody = new CANNON.Body({ mass: 0, material: cushionMaterial }); // Estático
@@ -182,14 +180,14 @@
                      const worldPos = tableGroup.localToWorld(cushionMesh.position.clone()); // Calcular pos mundial
                      cushionBody.position.copy(worldPos);
                      cushionBody.quaternion.copy(tableGroup.quaternion);
-                     // ***** AÑADIR COJINES A WORLD *****
-                     world.addBody(cushionBody);
-                     tableParts.push({ mesh: cushionMesh, body: cushionBody, type: 'cushion' });
-                     // console.log(` > Cuerpo físico cojín ${index+1} AÑADIDO a world.`);
+                     // ***** CAMBIO: NO AÑADIR COJINES A WORLD *****
+                     // world.addBody(cushionBody);
+                     tableParts.push({ mesh: cushionMesh, body: cushionBody, type: 'cushion' }); // Guardar referencia igualmente
+                     console.log(` > Cuerpo físico cojín ${index+1} CREADO (NO añadido a world).`);
 
-                 } catch(e) { console.error(`Error creando/añadiendo cojín ${index+1}:`, e); }
+                 } catch(e) { console.error(`Error creando cojín ${index+1}:`, e); }
             });
-            console.log("Cuerpos físicos de cojines añadidos a world.");
+            // console.log("Cuerpos físicos de cojines creados.");
 
             // Base visual (sin física)
             try {
@@ -247,6 +245,7 @@
     </script>
 </body>
 </html>
+
 
 
 
