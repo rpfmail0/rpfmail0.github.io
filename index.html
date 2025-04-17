@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>WebXR Passthrough - Mover Cubo</title>
+    <title>WebXR Passthrough - Debugging Mover Cubo</title>
     <style>
         body { margin: 0; overflow: hidden; font-family: sans-serif; }
         canvas { display: block; }
@@ -31,20 +31,18 @@
 
         let camera, scene, renderer;
         let cube;
-        // ***** NUEVO: Variables para interacción *****
-        let controller1, controller2; // Referencias a los mandos
-        let raycaster; // Para detectar intersecciones
-        const intersected = []; // Array temporal para objetos intersectados
-        let tempMatrix = new THREE.Matrix4(); // Matriz temporal para cálculos
-        let grabbingController = null; // Mando que está agarrando actualmente
-        let grabbedObject = null; // Objeto que está siendo agarrado
+        let controller1, controller2;
+        let raycaster;
+        const intersected = []; // Reutilizar este array (aunque no se use directamente ahora)
+        let tempMatrix = new THREE.Matrix4();
+        let grabbingController = null;
+        let grabbedObject = null;
 
-        init(); // Llamar a init primero
+        init();
 
-        // Función de inicialización
         function init() {
-            scene = new THREE.Scene(); // Crear escena
-            // Fondo nulo para passthrough (ya no se establece color)
+            console.log("Iniciando escena..."); // DEBUG
+            scene = new THREE.Scene();
 
             camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
             camera.position.set(0, 1.6, 3);
@@ -53,7 +51,7 @@
             renderer.setSize(window.innerWidth, window.innerHeight);
             renderer.setPixelRatio(window.devicePixelRatio);
             renderer.setClearAlpha(0);
-            renderer.xr.enabled = true; // Habilitar WebXR
+            renderer.xr.enabled = true;
             document.body.appendChild(renderer.domElement);
 
             const arButton = ARButton.createButton(renderer);
@@ -61,14 +59,14 @@
             document.body.appendChild(arButton);
 
             // --- Crear el Cubo ---
-            const geometry = new THREE.BoxGeometry(0.3, 0.3, 0.3); // Más pequeño para agarrar mejor
+            const geometry = new THREE.BoxGeometry(0.3, 0.3, 0.3);
             const material = new THREE.MeshStandardMaterial({
                 color: 0x00ffff, // Cian
                 roughness: 0.7,
                 metalness: 0.1
              });
             cube = new THREE.Mesh(geometry, material);
-            cube.position.set(0, 1.6, -1.5); // Más cerca para empezar
+            cube.position.set(0, 1.6, -1.5);
             scene.add(cube);
 
             // --- Añadir Luces ---
@@ -78,74 +76,85 @@
             directionalLight.position.set(1, 1, 1).normalize();
             scene.add(directionalLight);
 
-            // ***** NUEVO: Configuración de Mandos *****
-            // Mando 1 (generalmente mano derecha)
+            // --- Configuración de Mandos ---
             controller1 = renderer.xr.getController(0);
             controller1.addEventListener('selectstart', onSelectStart);
             controller1.addEventListener('selectend', onSelectEnd);
             scene.add(controller1);
+            console.log("Mando 1 añadido a escena y listeners configurados."); // DEBUG
 
-            // Mando 2 (generalmente mano izquierda)
             controller2 = renderer.xr.getController(1);
             controller2.addEventListener('selectstart', onSelectStart);
             controller2.addEventListener('selectend', onSelectEnd);
             scene.add(controller2);
+            console.log("Mando 2 añadido a escena y listeners configurados."); // DEBUG
 
-            // Opcional: Añadir modelos visuales para los mandos
-            // (Requiere importar 'XRControllerModelFactory' y modelos glTF)
-            // Por simplicidad, no los añadimos ahora, pero los mandos funcionan igual.
+            // ***** NUEVO: Añadir visualización básica a los mandos *****
+            // Una línea simple apuntando hacia adelante desde cada mando
+            const controllerMaterial = new THREE.LineBasicMaterial({ color: 0xffffff, linewidth: 2 }); // Línea blanca
+            const controllerGeometry = new THREE.BufferGeometry().setFromPoints([
+                new THREE.Vector3(0, 0, 0), // Origen en el mando
+                new THREE.Vector3(0, 0, -0.5) // Línea de 50cm hacia adelante (-Z local)
+            ]);
 
-            // ***** NUEVO: Configuración de Raycaster *****
+            const line1 = new THREE.Line(controllerGeometry, controllerMaterial);
+            controller1.add(line1); // Añadir línea como hija del mando 1
+            console.log("Visualización añadida al mando 1."); // DEBUG
+
+            const line2 = new THREE.Line(controllerGeometry.clone(), controllerMaterial.clone()); // Usar geometría/material clonado
+            controller2.add(line2); // Añadir línea como hija del mando 2
+            console.log("Visualización añadida al mando 2."); // DEBUG
+
+
+            // --- Configuración de Raycaster ---
             raycaster = new THREE.Raycaster();
+            // Opcional: Configurar near/far del raycaster si sospechamos de distancias
+            // raycaster.near = 0.1;
+            // raycaster.far = 5; // Por ejemplo, solo detectar hasta 5 metros
 
-            // --- Eventos ---
             window.addEventListener('resize', onWindowResize);
-
-            // Iniciar el bucle de animación/renderizado
             renderer.setAnimationLoop(animate);
+            console.log("Inicialización completa, iniciando bucle de animación."); // DEBUG
         }
 
-        // ***** NUEVO: Manejador para inicio de selección (gatillo pulsado) *****
         function onSelectStart(event) {
-            const controller = event.target; // Mando que disparó el evento
+            const controller = event.target;
+            console.log("Evento: selectstart detectado en mando", controller === controller1 ? 1 : 2); // DEBUG
 
-            // 1. Comprobar si ya estamos agarrando algo con ESTE mando
-            if (grabbingController === controller) return; // Ya está agarrando, no hacer nada
+            if (grabbingController === controller) {
+                console.log("DEBUG: Este mando ya está agarrando algo.");
+                return;
+            }
 
-            // 2. Lanzar un rayo desde el mando
-            tempMatrix.identity().extractRotation(controller.matrixWorld); // Obtener orientación del mando
-            raycaster.ray.origin.setFromMatrixPosition(controller.matrixWorld); // Origen del rayo = posición del mando
-            raycaster.ray.direction.set(0, 0, -1).applyMatrix4(tempMatrix); // Dirección = hacia adelante (-Z local)
+            tempMatrix.identity().extractRotation(controller.matrixWorld);
+            raycaster.ray.origin.setFromMatrixPosition(controller.matrixWorld);
+            raycaster.ray.direction.set(0, 0, -1).applyMatrix4(tempMatrix);
 
-            // 3. Buscar intersecciones con el cubo (y otros objetos si los hubiera)
-            const intersects = raycaster.intersectObject(cube); // Comprobar solo con el cubo
+            const intersects = raycaster.intersectObject(cube);
+            console.log("DEBUG: Intersecciones encontradas:", intersects.length); // DEBUG
 
             if (intersects.length > 0) {
-                // 4. ¡Intersección encontrada! Agarrar el objeto
-                grabbedObject = intersects[0].object; // El objeto intersectado (nuestro cubo)
-
-                // 5. "Adjuntar" el objeto al mando usando attach()
-                // attach() preserva la transformación mundial del objeto
-                controller.attach(grabbedObject);
-
-                // 6. Marcar este mando como el que está agarrando
+                console.log("DEBUG: ¡Intersección con el cubo!"); // DEBUG
+                grabbedObject = intersects[0].object;
+                controller.attach(grabbedObject); // Adjuntar al mando
                 grabbingController = controller;
+                console.log("DEBUG: Cubo agarrado por mando", controller === controller1 ? 1 : 2); // DEBUG
+            } else {
+                 console.log("DEBUG: No se encontró intersección con el cubo."); // DEBUG
             }
         }
 
-        // ***** NUEVO: Manejador para fin de selección (gatillo soltado) *****
         function onSelectEnd(event) {
-            const controller = event.target; // Mando que disparó el evento
+            const controller = event.target;
+            console.log("Evento: selectend detectado en mando", controller === controller1 ? 1 : 2); // DEBUG
 
-            // Comprobar si ESTE mando era el que estaba agarrando algo
             if (grabbingController === controller && grabbedObject) {
-                // "Desadjuntar" el objeto del mando y adjuntarlo de nuevo a la escena
-                // attach() preserva la transformación mundial al moverlo a la escena
-                scene.attach(grabbedObject);
-
-                // Limpiar las variables de estado
+                console.log("DEBUG: Soltando el cubo desde el mando", controller === controller1 ? 1 : 2); // DEBUG
+                scene.attach(grabbedObject); // Adjuntar a la escena
                 grabbedObject = null;
                 grabbingController = null;
+            } else {
+                 console.log("DEBUG: selectend pero no había nada agarrado por este mando."); // DEBUG
             }
         }
 
@@ -156,10 +165,13 @@
         }
 
         function animate() {
-            // La rotación se detiene mientras se agarra para no interferir
+            // No es necesario hacer nada específico con los mandos aquí para la interacción básica
+            // Sus posiciones se actualizan automáticamente porque están en la escena.
+
+            // Detener rotación si está agarrado
             if (!grabbingController) {
-                 cube.rotation.x += 0.01;
-                 cube.rotation.y += 0.01;
+                 // cube.rotation.x += 0.01; // Desactivar rotación para simplificar debug
+                 // cube.rotation.y += 0.01;
             }
 
             renderer.render(scene, camera);
@@ -168,4 +180,6 @@
     </script>
 </body>
 </html>
+
+
 
