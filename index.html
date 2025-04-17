@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
     <meta charset="utf-8">
-    <title>WebXR Billar Passthrough (Paso 49 - Test Añadir Mandos)</title> <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>WebXR Billar Passthrough (Paso 50 - Cambiar Orden Init)</title> <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
     <style>
         body { margin: 0; overflow: hidden; font-family: monospace; background-color: #000; }
         canvas { display: block; }
@@ -43,7 +43,7 @@
         // WebXR Controller Variables
         let controller1, controller2;
         let cueController = null;
-        let cueStickMesh; // Declarado pero no creado/añadido
+        let cueStickMesh; // Declarado pero no creado/añadido en setup
         let isTriggerDown = false;
 
         // Constants
@@ -59,7 +59,7 @@
 
         // --- Initialization ---
         function init() {
-            console.log("Iniciando escena WebXR Billar (Paso 49)...");
+            console.log("Iniciando escena WebXR Billar (Paso 50 - Orden Cambiado)...");
 
             scene = new THREE.Scene();
             camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 100);
@@ -75,6 +75,9 @@
 
             const arButton = ARButton.createButton(renderer);
             document.body.appendChild(arButton);
+
+            // ***** CAMBIO DE ORDEN: Configurar Mandos ANTES *****
+            setupControllers(); // Llamada movida aquí
 
             // Iluminación
             scene.add(new THREE.AmbientLight(0xAAAAAA));
@@ -112,15 +115,15 @@
             // --- Crear SOLO UNA BOLA VISUAL (Sin física) ---
             createSingleBallVisualOnly(tableGroup);
 
-            // --- Configurar Mandos (SIN TACO VISUAL) ---
-            setupControllers(); // Llamada reactivada, pero función modificada
+            // --- Configurar Mandos (Llamada movida arriba) ---
+            // setupControllers(); // Ya se llamó antes
 
             // --- Event Listeners ---
             window.addEventListener('resize', onWindowResize, false);
 
             // --- Start Animation Loop ---
             renderer.setAnimationLoop(animate); // animate simplificado
-            console.log("Inicialización completa (Paso 49).");
+            console.log("Inicialización completa (Paso 50).");
         }
 
         // --- Función para crear superficie (Visual + Física AÑADIDA a World) ---
@@ -155,20 +158,8 @@
                   cueController = controller2; // Asignar como mando del taco (aunque no tenga visual)
                   console.log("Mando 2 (Derecha - Cue) configurado SIN taco visual.");
 
-                  // ***** CAMBIO: Taco visual comentado *****
-                  /*
-                  const cueLength = 1.2;
-                  const cueRadius = 0.01;
-                  const cueGeometry = new THREE.CylinderGeometry(cueRadius, cueRadius * 0.8, cueLength, 16);
-                  const cueMaterial = new THREE.MeshStandardMaterial({ color: 0xdeb887, roughness: 0.5 });
-                  cueStickMesh = new THREE.Mesh(cueGeometry, cueMaterial);
-                  cueStickMesh.position.set(0, 0, -cueLength / 2 + 0.05);
-                  cueStickMesh.rotation.set(Math.PI / 2, 0, 0);
-                  cueStickMesh.castShadow = true;
-                  controller2.add(cueStickMesh);
-                  console.log("Taco añadido.");
-                  */
-                  // ***** FIN CAMBIO *****
+                  // ***** Taco visual comentado *****
+                  /* ... */
 
              } else { console.error("¡No se pudo obtener el Controller 2!"); }
              console.log("Mandos configurados.");
