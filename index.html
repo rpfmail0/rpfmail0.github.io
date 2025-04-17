@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
     <meta charset="utf-8">
-    <title>WebXR Billar Passthrough (Debug 11 - Test Mínimo Bola)</title>
+    <title>WebXR Billar Passthrough (Debug 12 - Añadir Tapete)</title>
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
     <style>
         body { margin: 0; overflow: hidden; font-family: monospace; background-color: #000; }
@@ -29,23 +29,25 @@
         import * as THREE from 'three';
         import { ARButton } from 'three/addons/webxr/ARButton.js';
 
-        // --- Global Variables (Minimal) ---
+        // --- Global Variables (Minimal + Table Surface) ---
         let camera, scene, renderer;
-        let tableGroup; // Solo el contenedor
+        let tableGroup; // Contenedor
 
         // Constants
         const ballRadius = 0.03075;
-        const tableSurfaceY = -0.4; // Altura donde debería estar la superficie
+        const tableWidth = 1.42;
+        const tableHeight = 2.84;
+        const tableThickness = 0.01;
+        const tableSurfaceY = -0.4; // Altura superficie
 
         init();
 
-        // --- Initialization (Super Simplified) ---
+        // --- Initialization ---
         function init() {
-            console.log("Iniciando escena WebXR Billar (Debug - Paso 11: Test Mínimo Bola)...");
+            console.log("Iniciando escena WebXR Billar (Debug - Paso 12: Añadir Tapete)...");
 
             scene = new THREE.Scene();
             camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 100);
-            // Posicionar cámara para ver la zona de la mesa
             camera.position.set(0, tableSurfaceY + 1.5, 1);
 
             renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
@@ -53,57 +55,91 @@
             renderer.setPixelRatio(window.devicePixelRatio);
             renderer.setClearAlpha(0);
             renderer.xr.enabled = true;
+            // ***** REINTRODUCIDO: Sombras *****
+            renderer.shadowMap.enabled = true;
             document.body.appendChild(renderer.domElement);
 
-            // Botón AR sigue siendo necesario
             const arButton = ARButton.createButton(renderer);
             document.body.appendChild(arButton);
 
-            // Iluminación mínima (para MeshBasicMaterial no es estrictamente necesaria, pero bueno)
-            scene.add(new THREE.AmbientLight(0xFFFFFF, 1.0)); // Luz ambiental blanca
+            // Iluminación (Ambiental + Spot para sombras)
+            scene.add(new THREE.AmbientLight(0xAAAAAA)); // Luz ambiental más suave
+             // ***** REINTRODUCIDO: Spotlight para sombras *****
+            const spotLight = new THREE.SpotLight(0xffffff, 0.9, 0, Math.PI / 4, 1);
+            spotLight.position.set(0, tableSurfaceY + 2, -1.5); // Posicionar luz
+            spotLight.castShadow = true; // Luz proyecta sombra
+            spotLight.shadow.mapSize.width = 1024; // Calidad sombra
+            spotLight.shadow.mapSize.height = 1024;
+            scene.add(spotLight);
+            // const pointLight = new THREE.PointLight(0xffffff, 0.5); // Quitar pointlight temporalmente
+            // camera.add(pointLight);
+            scene.add(camera);
 
-            // --- Crear SOLO el grupo contenedor de la mesa ---
+            // --- Crear grupo contenedor de la mesa ---
             tableGroup = new THREE.Group();
-            tableGroup.position.set(0, tableSurfaceY, -1.5); // Posicionar el grupo
+            tableGroup.position.set(0, tableSurfaceY, -1.5);
             scene.add(tableGroup);
             console.log("Table group creado en Y:", tableSurfaceY);
 
-            // --- Crear SOLO UNA BOLA VISUAL ---
-            createSingleBallVisualOnly(tableGroup);
+            // --- Crear Superficie Visual de la Mesa (Tapete) ---
+            createTableSurfaceVisualOnly(tableGroup); // Llamar a la función
 
-            // --- NO crear superficie, cojines, física, otros controladores, etc. ---
-            // createTableSurface();
+            // --- Crear SOLO UNA BOLA VISUAL ---
+            createSingleBallVisualOnly(tableGroup); // Mantener la bola de prueba
+
+            // --- NO crear cojines, física, controladores, etc. ---
             // createCushionsAndFrame();
-            // setupControllers(); // No configurar mandos ahora
+            // setupControllers();
 
             // --- Event Listeners ---
             window.addEventListener('resize', onWindowResize, false);
 
             // --- Start Animation Loop ---
             renderer.setAnimationLoop(animate);
-            console.log("Inicialización mínima completa (Paso 11).");
+            console.log("Inicialización con tapete y bola visual completa (Paso 12).");
         }
+
+        // --- Función para crear solo la superficie visual ---
+        function createTableSurfaceVisualOnly(group) {
+             console.log("Intentando crear el tapete visual...");
+             const tableGeometry = new THREE.BoxGeometry(tableWidth, tableThickness, tableHeight);
+             // Usar material estándar original
+             const material = new THREE.MeshStandardMaterial({ color: 0x006400, roughness: 0.9 });
+             const mesh = new THREE.Mesh(tableGeometry, material);
+             mesh.name = "TableSurface";
+             // Posición LOCAL relativa al grupo
+             mesh.position.y = -tableThickness / 2;
+             mesh.receiveShadow = true; // El tapete recibe sombras (de la bola)
+             console.log(` > Malla de tapete creada en pos local Y: ${mesh.position.y.toFixed(4)}`);
+
+             console.log(` > Children en tableGroup ANTES de añadir tapete: ${group.children.length}`);
+             try {
+                 group.add(mesh); // Añadir malla al grupo
+                 console.log(` > Children en tableGroup DESPUÉS de añadir tapete: ${group.children.length}`);
+                 console.log(" > Malla de tapete añadida al tableGroup.");
+             } catch (e) {
+                  console.error("¡Error al añadir la malla de tapete al tableGroup!", e);
+             }
+         }
 
 
         // --- Función para crear solo una bola visual ---
         function createSingleBallVisualOnly(group) {
             console.log("Intentando crear una única bola visual...");
             const sphereGeometry = new THREE.SphereGeometry(ballRadius, 32, 32);
-            // Usar material básico muy visible
-            const material = new THREE.MeshBasicMaterial({ color: 0xffffff }); // Blanco brillante
+            // Usar material estándar ahora que hay luces y sombras
+            const material = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.1, metalness: 0.1 });
+            // const material = new THREE.MeshBasicMaterial({ color: 0xffffff }); // Anterior
             const mesh = new THREE.Mesh(sphereGeometry, material);
-
-            // Posición LOCAL relativa al grupo (ligeramente sobre Y=0 del grupo)
             const ballYPos = ballRadius;
-            mesh.position.set(0, ballYPos, 0); // En el centro X,Z del grupo
-            console.log(` > Malla de bola creada en pos local: X=${mesh.position.x}, Y=${mesh.position.y.toFixed(4)}, Z=${mesh.position.z}`);
+            mesh.position.set(0, ballYPos, 0);
+            mesh.castShadow = true; // La bola proyecta sombra sobre el tapete
+            console.log(` > Malla de bola creada en pos local Y: ${mesh.position.y.toFixed(4)}`);
 
-            // mesh.castShadow = true; // Sombras desactivadas
-
-            console.log(` > Children en tableGroup ANTES de añadir: ${group.children.length}`);
+            console.log(` > Children en tableGroup ANTES de añadir bola: ${group.children.length}`);
             try {
-                group.add(mesh); // Añadir malla al grupo
-                console.log(` > Children en tableGroup DESPUÉS de añadir: ${group.children.length}`);
+                group.add(mesh);
+                console.log(` > Children en tableGroup DESPUÉS de añadir bola: ${group.children.length}`);
                 console.log(" > Malla de bola añadida al tableGroup.");
             } catch (e) {
                  console.error("¡Error al añadir la malla de bola al tableGroup!", e);
@@ -111,16 +147,8 @@
         }
 
         // --- Otras funciones comentadas o eliminadas ---
-        // function createTableSurface() { /* ... */ }
         // function createCushionsAndFrame() { /* ... */ }
-        // function createBalls() { /* ... */ }
         // function setupControllers() { /* ... */ }
-        // function onSelectStart(event) { /* ... */ }
-        // function onSelectEnd(event) { /* ... */ }
-        // function shootBall() { /* ... */ }
-        // function onCollision(event) { /* ... */ }
-        // function resetBall(ball) { /* ... */ }
-        // function checkBallsFallen() { /* ... */ }
 
         // --- Window Resize Handler ---
         function onWindowResize() {
@@ -142,6 +170,7 @@
     </script>
 </body>
 </html>
+
 
 
 
