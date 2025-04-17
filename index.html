@@ -3,15 +3,16 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>WebXR Básico - Cubo Giratorio</title>
+    <title>WebXR Passthrough - Cubo Flotante</title>
     <style>
         body { margin: 0; overflow: hidden; font-family: sans-serif; }
         canvas { display: block; }
-        #vr-button {
+        /* El ARButton se posiciona automáticamente, pero podemos ajustar si es necesario */
+        #ar-button {
             position: absolute;
             bottom: 20px;
             right: 20px;
-            z-index: 999; /* Asegura que esté sobre el canvas */
+            z-index: 999;
         }
     </style>
 </head>
@@ -26,8 +27,9 @@
     </script>
 
     <script type="module">
+        // ***** CAMBIO: Importar ARButton en lugar de VRButton *****
         import * as THREE from 'three';
-        import { VRButton } from 'three/addons/webxr/VRButton.js';
+        import { ARButton } from 'three/addons/webxr/ARButton.js';
 
         let camera, scene, renderer;
         let cube;
@@ -36,57 +38,77 @@
         function init() {
             // Crear escena
             scene = new THREE.Scene();
-            scene.background = new THREE.Color(0x505050); // Fondo gris
+            // ***** CAMBIO: Fondo nulo para permitir passthrough *****
+            // Ya no establecemos un color de fondo para la escena.
+            // scene.background = new THREE.Color(0x505050); // <- Línea eliminada/comentada
 
-            // Crear cámara (para la vista no-VR inicial)
+            // Crear cámara (para la vista no-AR/VR inicial)
+            // Sigue siendo útil para la vista previa 2D antes de entrar en AR.
             camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
-            // La posición de esta cámara se ignora en modo VR, pero es útil para la vista 2D.
-            camera.position.set(0, 1.6, 3);
+            camera.position.set(0, 1.6, 3); // Posición inicial arbitraria para vista 2D
 
             // Crear renderer WebGL
-            renderer = new THREE.WebGLRenderer({ antialias: true });
+            // ***** CAMBIO: Habilitar alpha para transparencia *****
+            renderer = new THREE.WebGLRenderer({
+                antialias: true,
+                alpha: true // <-- Necesario para que el canvas sea transparente
+            });
             renderer.setSize(window.innerWidth, window.innerHeight);
             renderer.setPixelRatio(window.devicePixelRatio);
+
+            // ***** CAMBIO: Establecer alfa de limpieza a 0 *****
+            // Asegura que el fondo del canvas sea completamente transparente.
+            renderer.setClearAlpha(0);
+
             document.body.appendChild(renderer.domElement);
 
-            // Habilitar WebXR
+            // Habilitar WebXR (necesario para AR también)
             renderer.xr.enabled = true;
 
-            // Añadir botón VR
-            const vrButton = VRButton.createButton(renderer);
-            vrButton.id = 'vr-button';
-            document.body.appendChild(vrButton);
+            // ***** CAMBIO: Añadir ARButton *****
+            // ARButton solicitará una sesión 'immersive-ar' que habilita passthrough si está disponible.
+            const arButton = ARButton.createButton(renderer, {
+                // Opcional: Puedes requerir características aquí si es necesario,
+                // pero ARButton suele pedir 'local-floor' por defecto.
+                // requiredFeatures: ['local-floor']
+            });
+            arButton.id = 'ar-button'; // Asignar ID para CSS
+            document.body.appendChild(arButton);
 
 
             // --- Crear el Cubo ---
-            const geometry = new THREE.BoxGeometry(1, 1, 1);
-            const material = new THREE.MeshStandardMaterial({ color: 0x00ff00 }); // Color verde
+            // La creación y posicionamiento del cubo no cambian.
+            const geometry = new THREE.BoxGeometry(0.5, 0.5, 0.5); // Un poco más pequeño quizás
+            const material = new THREE.MeshStandardMaterial({
+                color: 0x00ff00, // Verde
+                roughness: 0.7,
+                metalness: 0.1
+             });
             cube = new THREE.Mesh(geometry, material);
 
-            // ***** CAMBIO CLAVE *****
-            // Posicionar el cubo frente al origen de la cámara VR.
-            // Lo ponemos a 1.6m de altura (aprox. nivel de ojos) y 2m hacia adelante (Z negativo).
+            // Posicionar el cubo frente al origen (0,0,0) del espacio AR.
+            // (0, 1.6, -2) -> Aprox. altura ojos, 2m delante. Ajusta según necesites.
             cube.position.set(0, 1.6, -2);
             scene.add(cube);
 
             // --- Añadir Luces ---
-            const ambientLight = new THREE.AmbientLight(0x404040, 2);
+            // Las luces siguen siendo importantes para iluminar el cubo virtual.
+            const ambientLight = new THREE.AmbientLight(0xffffff, 1.5); // Luz ambiental más brillante
             scene.add(ambientLight);
 
-            const directionalLight = new THREE.DirectionalLight(0xffffff, 1.5);
+            const directionalLight = new THREE.DirectionalLight(0xffffff, 2.0); // Luz direccional más intensa
             directionalLight.position.set(1, 1, 1).normalize();
             scene.add(directionalLight);
 
             // --- Eventos ---
             window.addEventListener('resize', onWindowResize);
 
-            // Iniciar el bucle de animación/renderizado (gestionado por Three.js para VR/no-VR)
+            // Iniciar el bucle de animación/renderizado
             renderer.setAnimationLoop(animate);
         }
 
         // Función para manejar el redimensionamiento de la ventana
         function onWindowResize() {
-            // Solo ajusta la cámara no-VR
             camera.aspect = window.innerWidth / window.innerHeight;
             camera.updateProjectionMatrix();
             renderer.setSize(window.innerWidth, window.innerHeight);
@@ -98,7 +120,7 @@
             cube.rotation.x += 0.01;
             cube.rotation.y += 0.01;
 
-            // Renderizar la escena. En modo VR, Three.js usa la cámara XR automáticamente.
+            // Renderizar la escena. Three.js usa la cámara XR correcta (VR o AR) automáticamente.
             renderer.render(scene, camera);
         }
 
