@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
     <meta charset="utf-8">
-    <title>WebXR Billar Passthrough (Paso 16 + Logs Creación cueBall)</title> <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>WebXR Billar Passthrough (Paso 27 Rev B - Corregir Disparo)</title> <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
     <style>
         body { margin: 0; overflow: hidden; font-family: monospace; background-color: #000; }
         canvas { display: block; }
@@ -37,7 +37,7 @@
         const tableParts = [];
         let tableGroup;
         const balls = [];
-        let cueBall; // Variable global para la bola blanca
+        let cueBall;
         let initialBallPositions = {};
         let controller1, controller2;
         let cueController = null;
@@ -50,7 +50,7 @@
         let hitYellowAfterStrokeStart = false;
         let hitRedAfterStrokeStart = false;
         let cushionHitsThisStroke = 0;
-        const stopVelocityThreshold = 0.01;
+        const stopVelocityThreshold = 0.01; // Umbral para considerar parada en checkStrokeEnd
 
         // Constants
         // ... (igual que antes) ...
@@ -68,7 +68,7 @@
 
         // --- Initialization ---
         function init() {
-            console.log("Iniciando escena WebXR Billar (Paso 16 + Logs Creación cueBall)...");
+            console.log("Iniciando escena WebXR Billar (Paso 27 Rev B)...");
             // ... (Setup igual que antes) ...
             scene = new THREE.Scene();
             camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 100);
@@ -99,7 +99,7 @@
             world = new CANNON.World();
             world.gravity.set(0, -9.82, 0);
             world.broadphase = new CANNON.SAPBroadphase(world);
-            world.allowSleep = true;
+            world.allowSleep = true; // Permitir que los cuerpos duerman
             world.solver.iterations = 15;
 
             // Physics Materials Setup & Contact Materials
@@ -121,12 +121,7 @@
             createCushionsAndFrame();
 
             // --- Create Balls (Visuals + Physics) ---
-            createBalls(); // Llamar a la función
-
-            // ***** LOG: Comprobar cueBall justo después de la llamada *****
-            console.log('Valor de cueBall INMEDIATAMENTE DESPUÉS de createBalls():', cueBall);
-            console.log('Valor de cueBall.body INMEDIATAMENTE DESPUÉS de createBalls():', cueBall?.body);
-            // *************************************************************
+            createBalls(); // Llamar a la función para crear las 3 bolas
 
             // --- Setup Controllers ---
             setupControllers();
@@ -136,36 +131,20 @@
 
             // --- Start Animation Loop ---
             renderer.setAnimationLoop(animate);
-            console.log("Inicialización completa. Aplicando impulso de prueba...");
+            console.log("Inicialización completa. Iniciando bucle de animación (Paso 27 Rev B)...");
 
-            // ***** TEST: Aplicar impulso directamente al final de init *****
-            // Este bloque seguirá fallando si cueBall no está lista, pero los logs anteriores nos dirán por qué
-            if (cueBall && cueBall.body) {
-                console.log("Aplicando TEST impulse en init...");
-                const testImpulse = new CANNON.Vec3(0, 0, -0.3); // Impulso pequeño hacia adelante (-Z world)
-                const testOffset = new CANNON.Vec3(0, 0, 0); // Golpear en el centro
-                try {
-                    cueBall.body.wakeUp(); // Despertar la bola
-                    cueBall.body.applyImpulse(testImpulse, testOffset);
-                    console.log("TEST impulse aplicado en init.");
-                } catch (e) {
-                    console.error("Error aplicando TEST impulse en init:", e);
-                }
-            } else {
-                // Este es el error que viste antes
-                console.error("Cannot apply TEST impulse: cueBall o cueBall.body no están listos al final de init.");
-            }
-            // ***** FIN TEST *****
-
+             // ***** TEST IMPULSE REMOVED *****
+             // console.log("Aplicando impulso de prueba...");
+             // if (cueBall && cueBall.body) { ... } else { ... }
+             // ********************************
         }
 
         // Función para superficie de mesa (visual + física)
         function createTableSurface() { /* ... (definición completa como antes) ... */ }
         // Función para cojines/marco (visual + física)
         function createCushionsAndFrame() { /* ... (definición completa como antes) ... */ }
-
         // --- Create Balls Function (Visual + Physics) ---
-        function createBalls() {
+        function createBalls() { /* ... (definición completa como antes, sin logs extra) ... */
              const sphereGeometry = new THREE.SphereGeometry(ballRadius, 32, 32);
              const damping = 0.15;
              const ballYPos = ballRadius;
@@ -176,9 +155,9 @@
              ];
              balls.length = 0;
              initialBallPositions = {};
-             console.log("--- Entrando a createBalls() ---"); // Log inicio función
+             // console.log("--- Entrando a createBalls() ---");
              ballData.forEach(data => {
-                 console.log(` > Procesando bola: ${data.name}`); // Log inicio bola
+                 // console.log(` > Procesando bola: ${data.name}`);
                  const material = new THREE.MeshStandardMaterial({ color: data.color, roughness: 0.1, metalness: 0.1 });
                  const mesh = new THREE.Mesh(sphereGeometry, material);
                  mesh.position.set(data.x, ballYPos, data.z);
@@ -193,41 +172,126 @@
                      world.addBody(body);
                      const ballInfo = { mesh: mesh, body: body, name: data.name };
                      balls.push(ballInfo);
-
-                     // ***** LOG: Comprobar asignación de cueBall *****
                      if (data.name === 'white') {
-                         console.log(` > Asignando cueBall para ${data.name}...`);
-                         cueBall = ballInfo; // Asignación
-                         console.log(' > cueBall asignada DENTRO del if:', cueBall); // Verificar valor justo después
+                         // console.log(` > Asignando cueBall para ${data.name}...`);
+                         cueBall = ballInfo;
+                         // console.log(' > cueBall asignada DENTRO del if:', cueBall);
                      }
-                     // **********************************************
-
                      initialBallPositions[data.name] = { mesh: mesh.position.clone(), body: body.position.clone() };
                  } catch (e) { console.error(`Error creando cuerpo físico para ${data.name}:`, e); }
              });
-             console.log("--- Saliendo de createBalls() ---"); // Log fin función
+             // console.log("--- Saliendo de createBalls() ---");
         }
         // --- Setup Controllers (Con taco posicionado) ---
         function setupControllers() { /* ... (definición completa como antes) ... */ }
 
 
         // --- WebXR Event Handlers ---
-        function onSelectStart(event) { /* ... (definición completa como antes) ... */ }
-        function onSelectEnd(event) { /* ... (definición completa como antes) ... */ }
+        function onSelectStart(event) {
+             const controller = event.target;
+             if (controller === cueController) { isTriggerDown = true; }
+        }
+        function onSelectEnd(event) {
+             const controller = event.target;
+             if (controller === cueController && isTriggerDown) {
+                 isTriggerDown = false;
+                 console.log(">>> Trigger Released - Intentando disparar...");
+                 shootBall(); // Llamar a la función de disparo
+             }
+        }
 
         // --- Billiards Logic Functions ---
-        function shootBall() { /* ... (definición completa como en Paso 16) ... */ }
+
+        // shootBall Function - CON COMPROBACIÓN isQuiet MODIFICADA (como en Paso 27 original)
+        function shootBall() {
+            console.log("--- Entrando a shootBall() ---");
+            if (!cueBall || !cueBall.body) { console.error("Error: cueBall o cueBall.body no definido."); return; }
+            if (!cueController) { console.error("Error: cueController no definido."); return; }
+            console.log("Estado actual: isStrokeInProgress =", isStrokeInProgress);
+
+            // ***** Comprobación de quietud MÁS PERMISIVA *****
+            let allQuiet = true;
+            const quietCheckThreshold = 0.3; // Umbral de velocidad^2 más alto (antes 0.1)
+            console.log(`Comprobando si las bolas están quietas (Umbral Vel^2 < ${quietCheckThreshold} O Sleeping):`);
+            balls.forEach((b, index) => {
+                const sleep = b.body.sleepState === CANNON.Body.SLEEPING;
+                if (sleep) { return; } // Si duerme, está quieta
+                const vel = b.body.velocity.lengthSquared();
+                if (vel > quietCheckThreshold) {
+                    console.log(` > Bola ${index} AÚN SE MUEVE (Vel^2 = ${vel.toFixed(4)})`);
+                    allQuiet = false;
+                }
+            });
+            console.log("Resultado de isQuiet (Umbral Relajado):", allQuiet);
+            // ***** FIN CAMBIO *****
+
+            if (!allQuiet || isStrokeInProgress) {
+                console.log("CONDICIÓN DE DISPARO NO CUMPLIDA:", !allQuiet ? "Bolas en movimiento." : "", isStrokeInProgress ? "Tiro ya en progreso." : "");
+                return;
+            }
+
+            // 1. Obtener dirección del taco (mando)
+            // ... (igual que antes) ...
+            const aimDirection = new THREE.Vector3();
+            try {
+                 cueController.getWorldDirection(aimDirection);
+                 aimDirection.y = 0;
+                 aimDirection.normalize();
+            } catch (e) { console.error("Error obteniendo dirección del mando:", e); return; }
+
+            // 2. Magnitud de Impulso (fija por ahora)
+            const impulseMagnitude = 0.8;
+
+            // 3. Punto de Golpeo (centro por ahora)
+            const hitOffset = new CANNON.Vec3(0, 0, 0);
+
+            // 4. Aplicar Impulso
+            const impulse = new CANNON.Vec3( aimDirection.x * impulseMagnitude, 0, aimDirection.z * impulseMagnitude );
+            console.log("Aplicando impulso:", impulse);
+            try {
+                cueBall.body.wakeUp();
+                cueBall.body.applyImpulse(impulse, hitOffset);
+                console.log("Impulso aplicado a cueBall.body.");
+            } catch(e) { console.error("¡Error al aplicar impulso!", e); return; }
+
+            // 5. Iniciar seguimiento del tiro
+            isStrokeInProgress = true;
+            hitYellowAfterStrokeStart = false;
+            hitRedAfterStrokeStart = false;
+            cushionHitsThisStroke = 0;
+            console.log(`¡Disparo Realizado! Fuerza: ${impulseMagnitude.toFixed(2)}. Stroke iniciado.`);
+            console.log("--- Saliendo de shootBall() ---");
+        }
+
+        // onCollision Function - REACTIVADA (básica)
         function onCollision(event) { /* ... (definición completa como antes) ... */ }
+        // resetBall Function - REACTIVADA
         function resetBall(ball) { /* ... (definición completa como antes) ... */ }
+        // checkBallsFallen Function - REACTIVADA
         function checkBallsFallen() { /* ... (definición completa como antes) ... */ }
-        function checkStrokeEnd() { /* ... (definición completa como antes) ... */ }
+         // checkStrokeEnd Function - REACTIVADA
+         function checkStrokeEnd() { /* ... (definición completa como antes) ... */ }
 
 
         // --- Window Resize Handler ---
         function onWindowResize() { /* ... (definición completa como antes) ... */ }
 
         // --- Animation Loop ---
-        function animate() { /* ... (definición completa como en Paso 16) ... */ }
+        function animate() {
+            // Update Physics World
+            if (world) {
+                try { world.step(timeStep); } catch (e) { console.error("Error during world.step():", e); }
+            }
+
+            // Sync visuals with physics
+            balls.forEach(ball => { /* ... (definición completa como antes) ... */ });
+
+            // Check game state
+            try { checkBallsFallen(); checkStrokeEnd(); } catch (e) { console.error("Error during game state checks:", e); }
+
+            // Render Scene
+            try { renderer.render(scene, camera); } catch (e) { console.error("Error during renderer.render():", e); }
+        }
 
         // --- Copiar aquí las definiciones completas de las funciones auxiliares ---
         // (createTableSurface, createCushionsAndFrame, createBalls, setupControllers,
@@ -239,7 +303,4 @@
     </script>
 </body>
 </html>
-
-
-
 
