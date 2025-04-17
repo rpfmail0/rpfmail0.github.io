@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
     <meta charset="utf-8">
-    <title>WebXR Billar Passthrough (Debug 22 - Posicionar Taco)</title>
+    <title>WebXR Billar Passthrough (Debug 23 - Desactivar Posición Taco)</title>
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
     <style>
         body { margin: 0; overflow: hidden; font-family: monospace; background-color: #000; }
@@ -52,7 +52,7 @@
 
         // --- Initialization ---
         function init() {
-            console.log("Iniciando escena WebXR Billar (Debug - Paso 22: Posicionar Taco)...");
+            console.log("Iniciando escena WebXR Billar (Debug - Paso 23: Desactivar Posición Taco)...");
 
             scene = new THREE.Scene();
             camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 100);
@@ -83,7 +83,6 @@
             tableGroup = new THREE.Group();
             tableGroup.position.set(0, tableSurfaceY, -1.5);
             scene.add(tableGroup);
-            // console.log("Table group creado en Y:", tableSurfaceY);
 
             // --- Crear Superficie Visual de la Mesa (Tapete) ---
             createTableSurfaceVisualOnly(tableGroup);
@@ -95,14 +94,14 @@
             createSingleBallVisualOnly(tableGroup);
 
             // --- Configurar Mandos ---
-            setupControllers(); // Ahora posiciona el taco correctamente
+            setupControllers(); // Taco volverá al origen del mando
 
             // --- Event Listeners ---
             window.addEventListener('resize', onWindowResize, false);
 
             // --- Start Animation Loop ---
             renderer.setAnimationLoop(animate);
-            console.log("Inicialización con taco posicionado completa (Paso 22).");
+            console.log("Inicialización con taco en origen completa (Paso 23).");
         }
 
 
@@ -114,7 +113,7 @@
         function createSingleBallVisualOnly(group) { /* ... (igual que antes) ... */ }
 
 
-        // --- Setup Controllers (Posicionar Taco Correctamente) ---
+        // --- Setup Controllers (Desactivar Posición/Rotación Taco) ---
         function setupControllers() {
             console.log("Configurando mandos...");
             // Controller 1 (Left Hand)
@@ -133,27 +132,29 @@
                  scene.add(controller2);
                  cueController = controller2;
 
-                 // Taco (material estándar, posicionado)
+                 // Taco (material estándar, sin pos/rot)
                  const cueLength = 1.2;
                  const cueRadius = 0.01;
                  const cueGeometry = new THREE.CylinderGeometry(cueRadius, cueRadius * 0.8, cueLength, 16);
                  const cueMaterial = new THREE.MeshStandardMaterial({ color: 0xdeb887, roughness: 0.5 });
                  cueStickMesh = new THREE.Mesh(cueGeometry, cueMaterial);
-
-                 // ***** CAMBIO: Aplicar posición y rotación originales *****
-                 cueStickMesh.position.set(0, 0, -cueLength / 2 + 0.05); // Posicionarlo extendiéndose hacia adelante
-                 cueStickMesh.rotation.set(Math.PI / 2, 0, 0); // Rotarlo para que apunte a lo largo del eje Z del mando
                  cueStickMesh.castShadow = true;
 
-                 console.log("Añadiendo taco (material original) al mando 2 con posición/rotación...");
-                 controller2.add(cueStickMesh); // Añadir taco posicionado
+                 // ***** CAMBIO: Comentar posición y rotación *****
+                 // cueStickMesh.position.set(0, 0, -cueLength / 2 + 0.05);
+                 // cueStickMesh.rotation.set(Math.PI / 2, 0, 0);
+                 // ************************************************
+
+                 console.log("Añadiendo taco (material original) al mando 2 SIN posición/rotación...");
+                 controller2.add(cueStickMesh); // Añadir taco en el origen
                  console.log("Taco añadido.");
 
-                 // Quitar esfera roja de debug
-                 // const debugSphereGeo = new THREE.SphereGeometry(0.03, 16, 16);
-                 // const debugSphereMat = new THREE.MeshBasicMaterial({ color: 0xff0000 });
-                 // const debugSphere = new THREE.Mesh(debugSphereGeo, debugSphereMat);
-                 // controller2.add(debugSphere);
+                 // Añadir esfera roja de debug de nuevo para referencia
+                 const debugSphereGeo = new THREE.SphereGeometry(0.03, 16, 16);
+                 const debugSphereMat = new THREE.MeshBasicMaterial({ color: 0xff0000 });
+                 const debugSphere = new THREE.Mesh(debugSphereGeo, debugSphereMat);
+                 controller2.add(debugSphere);
+
 
             } else { console.error("¡No se pudo obtener el Controller 2!"); }
         }
@@ -184,6 +185,7 @@
     </script>
 </body>
 </html>
+
 
 
 
