@@ -1,13 +1,13 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
-    <meta charset="utf-8">
-    <title>WebXR Billar Passthrough (Debug 26 - Forzar Disparo)</title>
+    <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>WebXR Test Básico - Cubo AR</title>
     <style>
-        body { margin: 0; overflow: hidden; font-family: monospace; background-color: #000; }
+        body { margin: 0; overflow: hidden; font-family: sans-serif; }
         canvas { display: block; }
-        #ar-button { /* Style for the AR button */
+        #ar-button {
             position: absolute;
             bottom: 20px;
             right: 20px;
@@ -15,7 +15,6 @@
         }
     </style>
 
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/cannon.js/0.6.2/cannon.min.js"></script>
     <script type="importmap">
         {
             "imports": {
@@ -28,242 +27,93 @@
 <body>
     <script type="module">
         import * as THREE from 'three';
-        import { ARButton } from 'three/addons/webxr/ARButton.js';
+        import { ARButton } from 'three/addons/webxr/ARButton.js'; // Usar ARButton
 
-        // --- Global Variables ---
-        // ... (igual que antes) ...
         let camera, scene, renderer;
-        let world;
-        const timeStep = 1 / 60;
-        const tableParts = [];
-        let tableGroup;
-        const balls = [];
-        let cueBall;
-        let initialBallPositions = {};
-        let controller1, controller2;
-        let cueController = null;
-        let cueStickMesh;
-        let isTriggerDown = false;
-        let ballMaterial, cushionMaterial, tableMaterial;
-        let cm_ball_ball, cm_ball_cushion, cm_ball_table;
-        let score = 0;
-        let isStrokeInProgress = false;
-        let hitYellowAfterStrokeStart = false;
-        let hitRedAfterStrokeStart = false;
-        let cushionHitsThisStroke = 0;
-        const stopVelocityThreshold = 0.01;
-
-        // Constants
-        // ... (igual que antes) ...
-        const ballRadius = 0.03075;
-        const ballMass = 0.21;
-        const tableWidth = 1.42;
-        const tableHeight = 2.84;
-        const tableThickness = 0.01;
-        const cushionHeight = 0.05;
-        const cushionWidth = 0.05;
-        const tableSurfaceY = -0.4;
-
+        let cube;
 
         init();
 
-        // --- Initialization ---
         function init() {
-            console.log("Iniciando escena WebXR Billar (Debug - Paso 26)...");
-            // ... (Setup igual que antes) ...
-            scene = new THREE.Scene();
-            camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 100);
-            camera.position.set(0, tableSurfaceY + 1.5, 1);
+            console.log("Iniciando Test Básico Cubo AR...");
 
+            scene = new THREE.Scene(); // Crear escena
+
+            // Cámara (su posición será controlada por el headset en AR)
+            camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 100);
+            // Posición inicial no muy relevante en AR
+            camera.position.set(0, 1.6, 0); // Ajustar si es necesario para vista no-AR
+
+            // Renderer (con alpha para passthrough)
             renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
             renderer.setSize(window.innerWidth, window.innerHeight);
             renderer.setPixelRatio(window.devicePixelRatio);
-            renderer.setClearAlpha(0);
-            renderer.xr.enabled = true;
-            renderer.shadowMap.enabled = true;
+            renderer.setClearAlpha(0); // Fondo transparente
+            renderer.xr.enabled = true; // Habilitar WebXR
             document.body.appendChild(renderer.domElement);
 
+            // Botón AR
             const arButton = ARButton.createButton(renderer);
             document.body.appendChild(arButton);
+            console.log("AR Button creado.");
 
-            scene.add(new THREE.AmbientLight(0xAAAAAA));
-            const spotLight = new THREE.SpotLight(0xffffff, 0.9, 0, Math.PI / 4, 1);
-            spotLight.position.set(0, tableSurfaceY + 2, -1.5);
-            spotLight.castShadow = true;
-            spotLight.shadow.mapSize.width = 1024;
-            spotLight.shadow.mapSize.height = 1024;
-            scene.add(spotLight);
-            scene.add(camera);
+            // Luz simple
+            const ambientLight = new THREE.AmbientLight(0xffffff, 1.0);
+            scene.add(ambientLight);
+            const directionalLight = new THREE.DirectionalLight(0xffffff, 1.5);
+            directionalLight.position.set(1, 1, 1).normalize();
+            scene.add(directionalLight);
 
-            // --- Physics World (Cannon.js) ---
-            if (typeof CANNON === 'undefined') { console.error("Cannon.js no cargado!"); return; }
-            world = new CANNON.World();
-            world.gravity.set(0, -9.82, 0);
-            world.broadphase = new CANNON.SAPBroadphase(world);
-            world.allowSleep = true;
-            world.solver.iterations = 15;
 
-            // Physics Materials Setup & Contact Materials
-            ballMaterial = new CANNON.Material('ball');
-            cushionMaterial = new CANNON.Material('cushion');
-            tableMaterial = new CANNON.Material('table');
-            cm_ball_ball = new CANNON.ContactMaterial(ballMaterial, ballMaterial, { friction: 0.1, restitution: 0.9 });
-            cm_ball_cushion = new CANNON.ContactMaterial(ballMaterial, cushionMaterial, { friction: 0.15, restitution: 0.7 });
-            cm_ball_table = new CANNON.ContactMaterial(ballMaterial, tableMaterial, { friction: 0.04, restitution: 0.2 });
-            world.addContactMaterial(cm_ball_ball);
-            world.addContactMaterial(cm_ball_cushion);
-            world.addContactMaterial(cm_ball_table);
+            // --- Crear el Cubo ---
+            const geometry = new THREE.BoxGeometry(0.2, 0.2, 0.2); // Cubo pequeño
+            const material = new THREE.MeshStandardMaterial({
+                color: 0x00ff00, // Verde
+                roughness: 0.7,
+                metalness: 0.1
+             });
+            cube = new THREE.Mesh(geometry, material);
+            // Posicionar el cubo delante del usuario al iniciar AR
+            cube.position.set(0, 1.5, -1); // 1m delante, 1.5m alto (ajusta según veas)
+            scene.add(cube);
+            console.log("Cubo creado y añadido a la escena.");
 
-            // --- Create Billiards Table (Visuals + Physics) ---
-            tableGroup = new THREE.Group();
-            tableGroup.position.set(0, tableSurfaceY, -1.5);
-            scene.add(tableGroup);
-            createTableSurface();
-            createCushionsAndFrame();
+            // --- Eventos ---
+            window.addEventListener('resize', onWindowResize);
 
-            // --- Create Balls (Visuals + Physics) ---
-            createBalls();
-
-            // --- Setup Controllers ---
-            setupControllers();
-
-            // --- Event Listeners ---
-            window.addEventListener('resize', onWindowResize, false);
-
-            // --- Start Animation Loop ---
+            // --- Iniciar Bucle de Animación ---
             renderer.setAnimationLoop(animate);
-            console.log("Inicialización completa. Iniciando bucle de animación (Paso 26)...");
+            console.log("Inicialización completa. Iniciando bucle.");
         }
 
-        // Función para superficie de mesa (visual + física)
-        function createTableSurface() { /* ... (definición completa como antes) ... */ }
-        // Función para cojines/marco (visual + física)
-        function createCushionsAndFrame() { /* ... (definición completa como antes) ... */ }
-        // --- Create Balls Function (Visual + Physics) ---
-        function createBalls() { /* ... (definición completa como antes) ... */ }
-        // --- Setup Controllers (Con taco posicionado) ---
-        function setupControllers() { /* ... (definición completa como antes) ... */ }
-
-
-        // --- WebXR Event Handlers ---
-        function onSelectStart(event) {
-             const controller = event.target;
-             if (controller === cueController) { isTriggerDown = true; }
-        }
-        function onSelectEnd(event) {
-             const controller = event.target;
-             if (controller === cueController && isTriggerDown) {
-                 isTriggerDown = false;
-                 console.log(">>> Trigger Released - Intentando disparar (FORZADO)..."); // Log disparo
-                 shootBall(); // Llamar a la función de disparo
-             }
+        function onWindowResize() {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
         }
 
-        // --- Billiards Logic Functions ---
-
-        // shootBall Function - SIN COMPROBACIONES isQuiet/isStrokeInProgress
-        function shootBall() {
-            console.log("--- Entrando a shootBall() (CHECKS DESACTIVADOS) ---");
-            if (!cueBall || !cueBall.body) { console.error("Error: cueBall o cueBall.body no definido."); return; }
-            if (!cueController) { console.error("Error: cueController no definido."); return; }
-
-            // ***** CAMBIO DEBUG: Comprobaciones comentadas *****
-            /*
-            // console.log("Estado actual: isStrokeInProgress =", isStrokeInProgress);
-            // let allQuiet = true;
-            // const quietCheckThreshold = stopVelocityThreshold * 10;
-            // console.log(`Comprobando si las bolas están quietas (Umbral Vel^2 < ${quietCheckThreshold}):`);
-            // balls.forEach((b, index) => {
-            //     const vel = b.body.velocity.lengthSquared();
-            //     const sleep = b.body.sleepState === CANNON.Body.SLEEPING;
-            //     // console.log(` > Bola ${index}: Vel^2=${vel.toFixed(4)}, SleepState=${sleep}`);
-            //     if (!sleep && vel > quietCheckThreshold) {
-            //         allQuiet = false;
-            //     }
-            // });
-            // console.log("Resultado de isQuiet:", allQuiet);
-
-            // if (!allQuiet || isStrokeInProgress) {
-            //     console.log("CONDICIÓN DE DISPARO NO CUMPLIDA (CHECKS ACTIVOS):", !allQuiet ? "Bolas en movimiento." : "", isStrokeInProgress ? "Tiro ya en progreso." : "");
-            //     return; // Salir si no se cumplen las condiciones
-            // }
-            */
-            // ***** FIN CAMBIO DEBUG *****
-
-            console.log("CHECKS DE QUIETUD/STROKE DESACTIVADOS PARA DEBUG!");
-
-            // 1. Obtener dirección del taco (mando)
-            const aimDirection = new THREE.Vector3();
-            try {
-                 cueController.getWorldDirection(aimDirection);
-                 aimDirection.y = 0;
-                 aimDirection.normalize();
-            } catch (e) { console.error("Error obteniendo dirección del mando:", e); return; }
-
-            // 2. Magnitud de Impulso (fija por ahora)
-            const impulseMagnitude = 0.8; // Puedes ajustar este valor
-
-            // 3. Punto de Golpeo (centro por ahora)
-            const hitOffset = new CANNON.Vec3(0, 0, 0);
-
-            // 4. Aplicar Impulso
-            const impulse = new CANNON.Vec3( aimDirection.x * impulseMagnitude, 0, aimDirection.z * impulseMagnitude );
-            console.log("Aplicando impulso:", impulse);
-            try {
-                cueBall.body.wakeUp(); // Asegurarse de que no esté dormida
-                cueBall.body.applyImpulse(impulse, hitOffset);
-                console.log("Impulso aplicado a cueBall.body.");
-            } catch(e) { console.error("¡Error al aplicar impulso!", e); return; }
-
-            // 5. Iniciar seguimiento del tiro (IMPORTANTE para lógica de colisión/puntuación)
-            isStrokeInProgress = true;
-            hitYellowAfterStrokeStart = false;
-            hitRedAfterStrokeStart = false;
-            cushionHitsThisStroke = 0;
-            console.log(`¡Disparo Forzado Realizado! Fuerza: ${impulseMagnitude.toFixed(2)}. Stroke iniciado.`);
-            console.log("--- Saliendo de shootBall() ---");
-        }
-
-        // onCollision Function - REACTIVADA (básica)
-        function onCollision(event) { /* ... (definición completa como antes) ... */ }
-        // resetBall Function - REACTIVADA
-        function resetBall(ball) { /* ... (definición completa como antes) ... */ }
-        // checkBallsFallen Function - REACTIVADA
-        function checkBallsFallen() { /* ... (definición completa como antes) ... */ }
-         // checkStrokeEnd Function - REACTIVADA
-         function checkStrokeEnd() { /* ... (definición completa como antes) ... */ }
-
-
-        // --- Window Resize Handler ---
-        function onWindowResize() { /* ... (definición completa como antes) ... */ }
-
-        // --- Animation Loop ---
+        // Bucle de animación
         function animate() {
-            // Update Physics World
-            if (world) {
-                try { world.step(timeStep); } catch (e) { console.error("Error during world.step():", e); }
+            // Rotar el cubo
+            if (cube) {
+                cube.rotation.x += 0.01;
+                cube.rotation.y += 0.01;
             }
 
-            // Sync visuals with physics
-            balls.forEach(ball => { /* ... (definición completa como antes) ... */ });
-
-            // Check game state
-            try { checkBallsFallen(); checkStrokeEnd(); } catch (e) { console.error("Error during game state checks:", e); }
-
-            // Render Scene
-            try { renderer.render(scene, camera); } catch (e) { console.error("Error during renderer.render():", e); }
+            // Renderizar la escena (Three.js maneja la cámara AR automáticamente)
+            try {
+                renderer.render(scene, camera);
+            } catch(e) {
+                console.error("Error en render loop:", e);
+                // Detener bucle si hay error de renderizado grave
+                // renderer.setAnimationLoop(null);
+            }
         }
-
-        // --- Copiar aquí las definiciones completas de las funciones auxiliares ---
-        // (createTableSurface, createCushionsAndFrame, createBalls, setupControllers,
-        //  onSelectStart, onSelectEnd, onCollision, resetBall, checkBallsFallen,
-        //  checkStrokeEnd, onWindowResize)
-        // Asegúrate de que las definiciones completas de las funciones estén presentes.
-
 
     </script>
 </body>
 </html>
+
 
 
 
