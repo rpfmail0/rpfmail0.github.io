@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
     <meta charset="utf-8">
-    <title>WebXR Billar Passthrough (Debug 19 - Test Bola + Mandos)</title>
+    <title>WebXR Billar Passthrough (Debug 20 - Añadir Tapete)</title>
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
     <style>
         body { margin: 0; overflow: hidden; font-family: monospace; background-color: #000; }
@@ -29,9 +29,9 @@
         import * as THREE from 'three';
         import { ARButton } from 'three/addons/webxr/ARButton.js';
 
-        // --- Global Variables (Minimal + Controllers) ---
+        // --- Global Variables ---
         let camera, scene, renderer;
-        let tableGroup; // Contenedor (vacío excepto por la bola)
+        let tableGroup; // Contenedor
 
         // WebXR Controller Variables
         let controller1, controller2;
@@ -41,111 +41,143 @@
 
         // Constants
         const ballRadius = 0.03075;
-        const tableSurfaceY = -0.4; // Altura donde debería estar la superficie
+        const tableWidth = 1.42;
+        const tableHeight = 2.84;
+        const tableThickness = 0.01;
+        const tableSurfaceY = -0.4; // Altura superficie
 
         init();
 
-        // --- Initialization (Minimal + Controllers) ---
+        // --- Initialization ---
         function init() {
-            console.log("Iniciando escena WebXR Billar (Debug - Paso 19: Test Bola + Mandos)...");
+            console.log("Iniciando escena WebXR Billar (Debug - Paso 20: Añadir Tapete)...");
 
             scene = new THREE.Scene();
             camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 100);
-            camera.position.set(0, tableSurfaceY + 1.5, 1); // Posicionar cámara
+            camera.position.set(0, tableSurfaceY + 1.5, 1);
 
             renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
             renderer.setSize(window.innerWidth, window.innerHeight);
             renderer.setPixelRatio(window.devicePixelRatio);
             renderer.setClearAlpha(0);
             renderer.xr.enabled = true;
-            // Sombras desactivadas para simplificar
-            // renderer.shadowMap.enabled = true;
+            // ***** REINTRODUCIDO: Sombras *****
+            renderer.shadowMap.enabled = true;
             document.body.appendChild(renderer.domElement);
 
             const arButton = ARButton.createButton(renderer);
             document.body.appendChild(arButton);
 
-            // Iluminación mínima
-            scene.add(new THREE.AmbientLight(0xFFFFFF, 1.0));
+            // Iluminación (Ambiental + Spot para sombras) - Restaurada
+            scene.add(new THREE.AmbientLight(0xAAAAAA));
+            const spotLight = new THREE.SpotLight(0xffffff, 0.9, 0, Math.PI / 4, 1);
+            spotLight.position.set(0, tableSurfaceY + 2, -1.5);
+            spotLight.castShadow = true; // Luz proyecta sombra
+            spotLight.shadow.mapSize.width = 1024;
+            spotLight.shadow.mapSize.height = 1024;
+            scene.add(spotLight);
             scene.add(camera); // Añadir cámara a escena
 
-            // --- Crear SOLO el grupo contenedor ---
+            // --- Crear grupo contenedor de la mesa ---
             tableGroup = new THREE.Group();
             tableGroup.position.set(0, tableSurfaceY, -1.5); // Posicionar el grupo
             scene.add(tableGroup);
             console.log("Table group creado en Y:", tableSurfaceY);
 
+            // --- Crear Superficie Visual de la Mesa (Tapete) ---
+            createTableSurfaceVisualOnly(tableGroup); // Llamar a la función
+
             // --- Crear SOLO UNA BOLA VISUAL ---
-            createSingleBallVisualOnly(tableGroup);
+            createSingleBallVisualOnly(tableGroup); // Mantener la bola de prueba
 
             // --- Configurar Mandos ---
-            setupControllers(); // Añadir configuración de mandos y taco visual simplificado
+            setupControllers(); // Mantener mandos y taco simplificado
 
             // --- Event Listeners ---
             window.addEventListener('resize', onWindowResize, false);
 
             // --- Start Animation Loop ---
             renderer.setAnimationLoop(animate);
-            console.log("Inicialización mínima con bola y mandos completa (Paso 19).");
+            console.log("Inicialización con tapete, bola y mandos completa (Paso 20).");
         }
+
+
+        // --- Función para crear solo la superficie visual ---
+        function createTableSurfaceVisualOnly(group) {
+             console.log("Intentando crear el tapete visual...");
+             const tableGeometry = new THREE.BoxGeometry(tableWidth, tableThickness, tableHeight);
+             // Usar material estándar original
+             const material = new THREE.MeshStandardMaterial({ color: 0x006400, roughness: 0.9 });
+             const mesh = new THREE.Mesh(tableGeometry, material);
+             mesh.name = "TableSurface";
+             mesh.position.y = -tableThickness / 2; // Posición LOCAL
+             mesh.receiveShadow = true; // El tapete recibe sombras
+             console.log(` > Malla de tapete creada en pos local Y: ${mesh.position.y.toFixed(4)}`);
+             group.add(mesh); // Añadir al grupo
+             console.log(" > Malla de tapete añadida al tableGroup.");
+         }
 
 
         // --- Función para crear solo una bola visual ---
         function createSingleBallVisualOnly(group) {
             console.log("Intentando crear una única bola visual...");
             const sphereGeometry = new THREE.SphereGeometry(ballRadius, 32, 32);
-            // Usar material básico muy visible
-            const material = new THREE.MeshBasicMaterial({ color: 0xffffff }); // Blanco brillante
+            // ***** CAMBIO: Usar MeshStandardMaterial para la bola *****
+            const material = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.1, metalness: 0.1 });
             const mesh = new THREE.Mesh(sphereGeometry, material);
-            const ballYPos = ballRadius; // Posición Y local sobre la superficie teórica
-            mesh.position.set(0, ballYPos, 0); // En el centro X,Z del grupo
+            const ballYPos = ballRadius;
+            mesh.position.set(0, ballYPos, 0); // Posición LOCAL
+            // ***** REINTRODUCIDO: Bola proyecta sombra *****
+            mesh.castShadow = true;
             console.log(` > Malla de bola creada en pos local Y: ${mesh.position.y.toFixed(4)}`);
-            group.add(mesh); // Añadir malla al grupo
+            group.add(mesh); // Añadir al grupo
             console.log(" > Malla de bola añadida al tableGroup.");
         }
 
-        // --- Setup Controllers (Con taco en origen) ---
+        // --- Setup Controllers (Con taco en origen, material estándar) ---
         function setupControllers() {
             console.log("Configurando mandos...");
-            // Controller 1 (Left Hand - Basic line visual)
+            // Controller 1 (Left Hand)
             controller1 = renderer.xr.getController(0);
             scene.add(controller1);
             const lineMaterial = new THREE.LineBasicMaterial({ color: 0xcccccc });
             const lineGeometry = new THREE.BufferGeometry().setFromPoints([ new THREE.Vector3(0, 0, 0), new THREE.Vector3(0, 0, -0.2) ]);
             const line1 = new THREE.Line(lineGeometry, lineMaterial);
             controller1.add(line1);
-            console.log("Mando 1 (Izquierda) configurado con línea.");
+            // console.log("Mando 1 (Izquierda) configurado con línea.");
 
-            // Controller 2 (Right Hand - Cue Stick at Origin + Debug Sphere)
+            // Controller 2 (Right Hand)
             controller2 = renderer.xr.getController(1);
             if (controller2) {
-                 console.log("Controller 2 obtenido.");
-                 // Añadir listeners aunque no hagan nada útil aún
+                 // console.log("Controller 2 obtenido.");
                  controller2.addEventListener('selectstart', onSelectStart);
                  controller2.addEventListener('selectend', onSelectEnd);
                  scene.add(controller2);
-                 cueController = controller2; // Asignar como mando del taco
-                 console.log("Mando 2 (Derecha - Cue) configurado.");
+                 cueController = controller2;
+                 // console.log("Mando 2 (Derecha - Cue) configurado.");
 
-                 // Taco (material básico, en origen)
+                 // Taco (material estándar, en origen)
                  const cueLength = 1.2;
                  const cueRadius = 0.01;
                  const cueGeometry = new THREE.CylinderGeometry(cueRadius, cueRadius * 0.8, cueLength, 16);
-                 // Usar material básico para asegurar visibilidad
-                 const cueMaterial = new THREE.MeshBasicMaterial({ color: 0xdeb887 }); // Color madera básico
+                 // ***** CAMBIO: Usar MeshStandardMaterial para el taco *****
+                 const cueMaterial = new THREE.MeshStandardMaterial({ color: 0xdeb887, roughness: 0.5 });
                  cueStickMesh = new THREE.Mesh(cueGeometry, cueMaterial);
                  // ** Añadir taco en el origen del mando SIN rotación/offset **
-                 console.log("Añadiendo taco (básico) al origen del mando 2...");
+                 // cueStickMesh.position.set(0, 0, -cueLength / 2 + 0.05); // Posición/Rotación aún no aplicada
+                 // cueStickMesh.rotation.set(Math.PI / 2, 0, 0);
+                 // ***** REINTRODUCIDO: Taco proyecta sombra *****
+                 cueStickMesh.castShadow = true;
+                 console.log("Añadiendo taco (estándar) al origen del mando 2...");
                  controller2.add(cueStickMesh);
                  console.log("Taco añadido.");
 
-                 // Esfera roja de debug
+                 // Esfera roja de debug - Mantenida por ahora
                  const debugSphereGeo = new THREE.SphereGeometry(0.03, 16, 16);
                  const debugSphereMat = new THREE.MeshBasicMaterial({ color: 0xff0000 });
                  const debugSphere = new THREE.Mesh(debugSphereGeo, debugSphereMat);
-                 console.log("Añadiendo esfera roja de debug al mando 2...");
                  controller2.add(debugSphere);
-                 console.log("Esfera roja de debug añadida.");
+                 // console.log("Esfera roja de debug añadida.");
 
             } else {
                  console.error("¡No se pudo obtener el Controller 2!");
@@ -163,14 +195,8 @@
         }
 
         // --- Otras funciones comentadas o eliminadas ---
-        // function createTableSurface() { /* ... */ }
         // function createCushionsAndFrame() { /* ... */ }
         // function shootBall() { /* ... */ }
-        // function onCollision(event) { /* ... */ }
-        // function resetBall(ball) { /* ... */ }
-        // function checkBallsFallen() { /* ... */ }
-        // function checkStrokeEnd() { /* ... */ }
-
 
         // --- Window Resize Handler ---
         function onWindowResize() {
@@ -192,6 +218,7 @@
     </script>
 </body>
 </html>
+
 
 
 
