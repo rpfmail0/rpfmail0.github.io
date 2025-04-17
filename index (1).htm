@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>WebXR Básico - Cubo Giratorio</title>
+    <style>
+        body { margin: 0; overflow: hidden; font-family: sans-serif; }
+        canvas { display: block; }
+        #vr-button {
+            position: absolute;
+            bottom: 20px;
+            right: 20px;
+            z-index: 999; /* Asegura que esté sobre el canvas */
+        }
+    </style>
+</head>
+<body>
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "https://cdn.jsdelivr.net/npm/three@0.163.0/build/three.module.js",
+                "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.163.0/examples/jsm/"
+            }
+        }
+    </script>
+
+    <script type="module">
+        import * as THREE from 'three';
+        import { VRButton } from 'three/addons/webxr/VRButton.js';
+
+        let camera, scene, renderer;
+        let cube;
+
+        // Función de inicialización
+        function init() {
+            // Crear escena
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color(0x505050); // Fondo gris
+
+            // Crear cámara
+            // El FOV (campo de visión) es 75 grados.
+            // El aspect ratio se basa en el tamaño de la ventana.
+            // Near y Far definen el rango de renderizado.
+            camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+            camera.position.set(0, 1.6, 3); // Posición inicial de la cámara (simulando altura de ojos y distancia)
+
+            // Crear renderer WebGL
+            renderer = new THREE.WebGLRenderer({ antialias: true });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.setPixelRatio(window.devicePixelRatio); // Mejor calidad en pantallas de alta densidad
+            document.body.appendChild(renderer.domElement);
+
+            // Habilitar WebXR
+            renderer.xr.enabled = true;
+
+            // Añadir botón VR
+            // El botón se añade al body y se posiciona con CSS.
+            const vrButton = VRButton.createButton(renderer);
+            vrButton.id = 'vr-button'; // Asignar ID para CSS si es necesario
+            document.body.appendChild(vrButton);
+
+
+            // --- Crear el Cubo ---
+            const geometry = new THREE.BoxGeometry(1, 1, 1); // Dimensiones del cubo (ancho, alto, prof.)
+            // Material básico que reacciona a la luz
+            const material = new THREE.MeshStandardMaterial({ color: 0x00ff00 }); // Color verde
+            cube = new THREE.Mesh(geometry, material);
+            cube.position.set(0, 1.6, 0); // Posicionar el cubo frente a la cámara inicial y a la altura de los ojos
+            scene.add(cube);
+
+            // --- Añadir Luces ---
+            // Luz ambiental para iluminar toda la escena de forma pareja
+            const ambientLight = new THREE.AmbientLight(0x404040, 2); // color gris suave, intensidad
+            scene.add(ambientLight);
+
+            // Luz direccional para simular el sol y crear sombras
+            const directionalLight = new THREE.DirectionalLight(0xffffff, 1.5); // color blanco, intensidad
+            directionalLight.position.set(1, 1, 1).normalize(); // Posición de la luz
+            scene.add(directionalLight);
+
+            // --- Eventos ---
+            // Ajustar tamaño del renderer y aspect ratio de la cámara si la ventana cambia de tamaño
+            window.addEventListener('resize', onWindowResize);
+
+            // Iniciar el bucle de animación/renderizado
+            renderer.setAnimationLoop(animate);
+        }
+
+        // Función para manejar el redimensionamiento de la ventana
+        function onWindowResize() {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix(); // Actualizar matriz de proyección de la cámara
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        }
+
+        // Bucle de animación
+        function animate() {
+            // Rotar el cubo en cada frame
+            cube.rotation.x += 0.01;
+            cube.rotation.y += 0.01;
+
+            // Renderizar la escena desde la perspectiva de la cámara
+            renderer.render(scene, camera);
+        }
+
+        // Iniciar todo cuando la página cargue
+        init();
+
+    </script>
+</body>
+</html>
+
