@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
     <meta charset="utf-8">
-    <title>WebXR Billar Passthrough (Debug 17 - Flexibilizar Disparo)</title>
+    <title>WebXR Billar Passthrough (Debug 18 - Forzar Disparo)</title>
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
     <style>
         body { margin: 0; overflow: hidden; font-family: monospace; background-color: #000; }
@@ -31,7 +31,7 @@
         import { ARButton } from 'three/addons/webxr/ARButton.js';
 
         // --- Global Variables ---
-        // ... (igual que antes) ...
+        // ... (igual que Paso 16/17) ...
         let camera, scene, renderer;
         let world;
         const timeStep = 1 / 60;
@@ -51,10 +51,10 @@
         let hitYellowAfterStrokeStart = false;
         let hitRedAfterStrokeStart = false;
         let cushionHitsThisStroke = 0;
-        const stopVelocityThreshold = 0.01; // Umbral original (aún se usa en checkStrokeEnd)
+        const stopVelocityThreshold = 0.01;
 
         // Constants
-        // ... (igual que antes) ...
+        // ... (igual que Paso 16/17) ...
         const ballRadius = 0.03075;
         const ballMass = 0.21;
         const tableWidth = 1.42;
@@ -69,8 +69,8 @@
 
         // --- Initialization ---
         function init() {
-            console.log("Iniciando escena WebXR Billar (Debug - Paso 17)...");
-            // ... (igual que antes) ...
+            console.log("Iniciando escena WebXR Billar (Debug - Paso 18)...");
+            // ... (Setup igual que Paso 16/17) ...
             scene = new THREE.Scene();
             camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 100);
             camera.position.set(0, tableSurfaceY + 1.5, 1);
@@ -103,12 +103,10 @@
             world.allowSleep = true;
             world.solver.iterations = 15;
 
-            // Physics Materials Setup
+            // Physics Materials Setup & Contact Materials
             ballMaterial = new CANNON.Material('ball');
             cushionMaterial = new CANNON.Material('cushion');
             tableMaterial = new CANNON.Material('table');
-
-            // Contact Materials
             cm_ball_ball = new CANNON.ContactMaterial(ballMaterial, ballMaterial, { friction: 0.1, restitution: 0.9 });
             cm_ball_cushion = new CANNON.ContactMaterial(ballMaterial, cushionMaterial, { friction: 0.15, restitution: 0.7 });
             cm_ball_table = new CANNON.ContactMaterial(ballMaterial, tableMaterial, { friction: 0.04, restitution: 0.2 });
@@ -120,7 +118,6 @@
             tableGroup = new THREE.Group();
             tableGroup.position.set(0, tableSurfaceY, -1.5);
             scene.add(tableGroup);
-
             createTableSurface();
             createCushionsAndFrame();
 
@@ -135,65 +132,72 @@
 
             // --- Start Animation Loop ---
             renderer.setAnimationLoop(animate);
-            console.log("Inicialización completa. Iniciando bucle de animación (Paso 17)...");
+            console.log("Inicialización completa. Iniciando bucle de animación (Paso 18)...");
         }
 
         // Función para superficie de mesa (visual + física)
-        function createTableSurface() { /* ... (igual que antes) ... */ }
+        function createTableSurface() { /* ... (definición completa como en Paso 16/17) ... */ }
         // Función para cojines/marco (visual + física)
-        function createCushionsAndFrame() { /* ... (igual que antes) ... */ }
+        function createCushionsAndFrame() { /* ... (definición completa como en Paso 16/17) ... */ }
         // --- Create Balls Function (Visual + Physics) ---
-        function createBalls() { /* ... (igual que antes) ... */ }
+        function createBalls() { /* ... (definición completa como en Paso 16/17) ... */ }
         // --- Setup Controllers (Con taco posicionado) ---
-        function setupControllers() { /* ... (igual que antes) ... */ }
+        function setupControllers() { /* ... (definición completa como en Paso 16/17) ... */ }
 
 
         // --- WebXR Event Handlers ---
-        function onSelectStart(event) { /* ... (igual que antes) ... */ }
-        function onSelectEnd(event) { /* ... (igual que antes) ... */ }
+        function onSelectStart(event) {
+             const controller = event.target;
+             if (controller === cueController) { isTriggerDown = true; }
+        }
+        function onSelectEnd(event) {
+             const controller = event.target;
+             if (controller === cueController && isTriggerDown) {
+                 isTriggerDown = false;
+                 console.log(">>> Trigger Released - Intentando disparar (FORZADO)...");
+                 shootBall(); // Llamar a la función de disparo
+             }
+        }
 
         // --- Billiards Logic Functions ---
 
-        // shootBall Function - Con comprobación de 'quietud' FLEXIBILIZADA
+        // shootBall Function - SIN COMPROBACIONES isQuiet/isStrokeInProgress
         function shootBall() {
-            console.log("--- Entrando a shootBall() ---");
+            console.log("--- Entrando a shootBall() (CHECKS DESACTIVADOS) ---");
             if (!cueBall || !cueBall.body) { console.error("Error: cueBall o cueBall.body no definido."); return; }
             if (!cueController) { console.error("Error: cueController no definido."); return; }
-            console.log("Estado actual: isStrokeInProgress =", isStrokeInProgress);
 
-            // ***** CAMBIO DEBUG: Comprobación de quietud MUCHO MENOS ESTRICTA *****
+            // ***** CAMBIO DEBUG: Comprobaciones comentadas *****
+            /*
+            console.log("Estado actual: isStrokeInProgress =", isStrokeInProgress);
             let allQuiet = true;
-            const quietThresholdDebug = 0.5; // Umbral MUY alto, permite disparar si se mueven un poco
-            console.log(`Comprobando si las bolas están quietas (Umbral Debug Vel^2 < ${quietThresholdDebug}):`);
+            const quietThresholdDebug = 0.5; // O el umbral que sea
+            console.log(`Comprobando si las bolas están quietas...`);
             balls.forEach((b, index) => {
                 const vel = b.body.velocity.lengthSquared();
                 const sleep = b.body.sleepState === CANNON.Body.SLEEPING;
-                // console.log(` > Bola ${index}: Vel^2=${vel.toFixed(4)}, SleepState=${sleep}`); // Log menos verboso
-                // Considerar quieta si está dormida O si su velocidad es MUY baja (según umbral de debug)
-                if (!sleep && vel > quietThresholdDebug) {
+                if (!sleep && vel > quietThresholdDebug) { // Usar umbral adecuado
                     allQuiet = false;
-                    console.log(` > Bola ${index} AÚN SE MUEVE (Vel^2 = ${vel.toFixed(4)})`);
                 }
             });
-            console.log("Resultado de isQuiet (Debug):", allQuiet);
-            // ***** FIN CAMBIO DEBUG *****
-
+            console.log("Resultado de isQuiet:", allQuiet);
 
             if (!allQuiet || isStrokeInProgress) {
-                console.log("CONDICIÓN DE DISPARO NO CUMPLIDA:", !allQuiet ? "Bolas en movimiento." : "", isStrokeInProgress ? "Tiro ya en progreso." : "");
-                return;
+                console.log("CONDICIÓN DE DISPARO NO CUMPLIDA (CHECKS ACTIVOS):", !allQuiet ? "Bolas en movimiento." : "", isStrokeInProgress ? "Tiro ya en progreso." : "");
+                return; // Salir si no se cumplen las condiciones
             }
+            */
+            // ***** FIN CAMBIO DEBUG *****
+
+            console.log("CHECKS DE QUIETUD/STROKE DESACTIVADOS PARA DEBUG!");
 
             // 1. Obtener dirección del taco (mando)
-            // ... (igual que antes) ...
             const aimDirection = new THREE.Vector3();
             try {
                  cueController.getWorldDirection(aimDirection);
                  aimDirection.y = 0;
                  aimDirection.normalize();
-                 // console.log("Dirección de apuntado (normalizada):", aimDirection.x.toFixed(3), aimDirection.y.toFixed(3), aimDirection.z.toFixed(3));
             } catch (e) { console.error("Error obteniendo dirección del mando:", e); return; }
-
 
             // 2. Magnitud de Impulso (fija por ahora)
             const impulseMagnitude = 0.8;
@@ -208,31 +212,29 @@
                 cueBall.body.wakeUp();
                 cueBall.body.applyImpulse(impulse, hitOffset);
                 console.log("Impulso aplicado a cueBall.body.");
-                // console.log("Velocidad cueBall INMEDIATAMENTE después:", cueBall.body.velocity);
             } catch(e) { console.error("¡Error al aplicar impulso!", e); return; }
 
-
-            // 5. Iniciar seguimiento del tiro
+            // 5. Iniciar seguimiento del tiro (IMPORTANTE: Aún necesario para la lógica de colisión/puntuación)
             isStrokeInProgress = true;
             hitYellowAfterStrokeStart = false;
             hitRedAfterStrokeStart = false;
             cushionHitsThisStroke = 0;
-            console.log(`¡Disparo Realizado! Fuerza: ${impulseMagnitude.toFixed(2)}. Stroke iniciado.`);
+            console.log(`¡Disparo Forzado Realizado! Fuerza: ${impulseMagnitude.toFixed(2)}. Stroke iniciado.`);
             console.log("--- Saliendo de shootBall() ---");
         }
 
         // onCollision Function - REACTIVADA (básica)
-        function onCollision(event) { /* ... (igual que antes) ... */ }
+        function onCollision(event) { /* ... (definición completa como en Paso 16/17) ... */ }
         // resetBall Function - REACTIVADA
-        function resetBall(ball) { /* ... (igual que antes) ... */ }
+        function resetBall(ball) { /* ... (definición completa como en Paso 16/17) ... */ }
         // checkBallsFallen Function - REACTIVADA
-        function checkBallsFallen() { /* ... (igual que antes) ... */ }
+        function checkBallsFallen() { /* ... (definición completa como en Paso 16/17) ... */ }
          // checkStrokeEnd Function - REACTIVADA
-         function checkStrokeEnd() { /* ... (igual que antes, usa stopVelocityThreshold original) ... */ }
+         function checkStrokeEnd() { /* ... (definición completa como en Paso 16/17) ... */ }
 
 
         // --- Window Resize Handler ---
-        function onWindowResize() { /* ... (igual que antes) ... */ }
+        function onWindowResize() { /* ... (definición completa como en Paso 16/17) ... */ }
 
         // --- Animation Loop ---
         function animate() {
@@ -242,7 +244,7 @@
             }
 
             // Sync visuals with physics
-            balls.forEach(ball => { /* ... (igual que antes) ... */ });
+            balls.forEach(ball => { /* ... (definición completa como en Paso 16/17) ... */ });
 
             // Check game state
             try { checkBallsFallen(); checkStrokeEnd(); } catch (e) { console.error("Error during game state checks:", e); }
@@ -255,12 +257,11 @@
         // (createTableSurface, createCushionsAndFrame, createBalls, setupControllers,
         //  onSelectStart, onSelectEnd, onCollision, resetBall, checkBallsFallen,
         //  checkStrokeEnd, onWindowResize)
-        // Asegúrate de que las definiciones completas de las funciones que se
-        // marcaron como /* ... (igual que antes) ... */ estén presentes en el código final.
-        // Por brevedad en este ejemplo, no las repito, pero deben estar en tu archivo.
+        // Asegúrate de que las definiciones completas de las funciones estén presentes.
 
 
     </script>
 </body>
 </html>
+
 
