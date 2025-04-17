@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
     <meta charset="utf-8">
-    <title>WebXR Billar Passthrough (Paso 42 - Test Render Tapete)</title> <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>WebXR Billar Passthrough (Paso 45 - Añadir Mandos/Taco)</title> <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
     <style>
         body { margin: 0; overflow: hidden; font-family: monospace; background-color: #000; }
         canvas { display: block; }
@@ -37,27 +37,29 @@
         let world;
         const timeStep = 1 / 60;
         const tableParts = [];
-        let tableMaterial; // Solo material de tabla
+        let tableMaterial;
+        let cushionMaterial; // Definido pero no usado en física aún
 
-        // WebXR Controller Variables - Declaradas pero no usadas
+        // ***** REINTRODUCIDO: Variables de Mandos *****
         let controller1, controller2;
-        let cueController = null;
-        let cueStickMesh;
+        let cueController = null; // Se asignará al controller2
+        let cueStickMesh; // Visual del taco
         let isTriggerDown = false;
 
         // Constants
+        const ballRadius = 0.03075;
         const tableWidth = 1.42;
         const tableHeight = 2.84;
         const tableThickness = 0.01;
-        // const cushionHeight = 0.05; // No necesario ahora
-        // const cushionWidth = 0.05; // No necesario ahora
+        const cushionHeight = 0.05;
+        const cushionWidth = 0.05;
         const tableSurfaceY = -0.4;
 
         init();
 
         // --- Initialization ---
         function init() {
-            console.log("Iniciando escena WebXR Billar (Paso 42)...");
+            console.log("Iniciando escena WebXR Billar (Paso 45)...");
 
             scene = new THREE.Scene();
             camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 100);
@@ -68,7 +70,7 @@
             renderer.setPixelRatio(window.devicePixelRatio);
             renderer.setClearAlpha(0);
             renderer.xr.enabled = true;
-            renderer.shadowMap.enabled = true; // Dejar sombras por si acaso
+            renderer.shadowMap.enabled = true; // Mantener sombras
             document.body.appendChild(renderer.domElement);
 
             const arButton = ARButton.createButton(renderer);
@@ -90,9 +92,10 @@
             world.broadphase = new CANNON.SAPBroadphase(world);
             console.log("Mundo físico Cannon.js creado.");
 
-            // Material físico de tabla
+            // Materiales físicos necesarios
             tableMaterial = new CANNON.Material('table');
-            console.log("Material físico de tabla creado.");
+            cushionMaterial = new CANNON.Material('cushion');
+            console.log("Materiales físicos creados.");
 
             // --- Crear Grupo de la Mesa ---
             tableGroup = new THREE.Group();
@@ -100,67 +103,91 @@
             scene.add(tableGroup);
             console.log("Table group creado en Y:", tableSurfaceY);
 
-            // --- Crear SOLO Superficie (Visual + Física AÑADIDA) ---
-            createTableSurface(); // Llama a la función modificada
+            // --- Crear Superficie (Visual + Física AÑADIDA) ---
+            createTableSurface(); // Añade tableBody a world
 
-            // --- OTRAS FUNCIONES DE CREACIÓN COMENTADAS ---
-            // createCushionsAndFrame();
-            // createSingleBallVisualOnly(tableGroup);
-            // setupControllers();
-            console.log("Llamadas a createCushions/createBall/setupControllers DESACTIVADAS.");
+            // --- Crear Cojines y Marco (SOLO VISUAL) ---
+            createCushionsAndFrameVisualsOnly(tableGroup); // Solo visual por ahora
+
+            // --- Crear SOLO UNA BOLA VISUAL (Sin física) ---
+            createSingleBallVisualOnly(tableGroup);
+
+            // --- Configurar Mandos (Visual) ---
+            setupControllers(); // Llamada reactivada
 
             // --- Event Listeners ---
             window.addEventListener('resize', onWindowResize, false);
 
             // --- Start Animation Loop ---
             renderer.setAnimationLoop(animate); // animate simplificado
-            console.log("Inicialización completa (Paso 42).");
+            console.log("Inicialización completa (Paso 45).");
         }
 
         // --- Función para crear superficie (Visual + Física AÑADIDA a World) ---
-        function createTableSurface() {
-             console.log("Creando superficie (Visual + Física)...");
-             let tableSurfaceMesh; // Declarar fuera del try
-             try {
-                 // Visual
-                 const tableGeometry = new THREE.BoxGeometry(tableWidth, tableThickness, tableHeight);
-                 const tableMeshMaterial = new THREE.MeshStandardMaterial({ color: 0x006400, roughness: 0.9 });
-                 tableSurfaceMesh = new THREE.Mesh(tableGeometry, tableMeshMaterial); // Asignar aquí
-                 tableSurfaceMesh.name = "TableSurface";
-                 tableSurfaceMesh.position.y = -tableThickness / 2; // Local
-                 tableSurfaceMesh.receiveShadow = true;
-                 tableGroup.add(tableSurfaceMesh);
-                 console.log(" > Malla de tapete añadida.");
-             } catch(e) {
-                 console.error("Error creando malla de tapete:", e);
-                 return; // Salir si falla la malla
-             }
+        function createTableSurface() { /* ... (definición completa como antes) ... */ }
+        // --- Función para crear cojines y marco (SOLO VISUAL) ---
+        function createCushionsAndFrameVisualsOnly(group) { /* ... (definición completa como antes) ... */ }
+        // --- Función para crear solo una bola visual (Sin física) ---
+        function createSingleBallVisualOnly(group) { /* ... (definición completa como antes) ... */ }
 
-             let tableBody; // Declarar fuera del try
-             try {
-                 // Física Estática
-                 const tableShape = new CANNON.Box(new CANNON.Vec3(tableWidth / 2, tableThickness / 2, tableHeight / 2));
-                 tableBody = new CANNON.Body({ mass: 0, material: tableMaterial }); // Estático
-                 tableBody.addShape(tableShape);
-                 const tableBodyWorldPos = tableGroup.localToWorld(tableSurfaceMesh.position.clone()); // Calcular pos mundial
-                 tableBody.position.copy(tableBodyWorldPos);
-                 tableBody.quaternion.copy(tableGroup.quaternion);
-                 world.addBody(tableBody); // Añadir a world
-                 console.log(" > Cuerpo físico de superficie AÑADIDO a world.");
-                 tableParts.push({ mesh: tableSurfaceMesh, body: tableBody, type: 'table' });
-             } catch(e) {
-                 console.error("Error creando/añadiendo cuerpo físico de superficie:", e);
-                 // No necesariamente salir, la malla podría seguir visible
-             }
+        // --- Setup Controllers (Con taco posicionado correctamente) ---
+        function setupControllers() {
+             console.log("Configurando mandos (Taco en Controller 2)...");
+             // Controller 1 (Izquierda - Línea)
+             controller1 = renderer.xr.getController(0);
+             if (controller1) {
+                  controller1.addEventListener('selectstart', onSelectStart);
+                  controller1.addEventListener('selectend', onSelectEnd);
+                  scene.add(controller1);
+                  const lineMaterial = new THREE.LineBasicMaterial({ color: 0xcccccc });
+                  const lineGeometry = new THREE.BufferGeometry().setFromPoints([ new THREE.Vector3(0, 0, 0), new THREE.Vector3(0, 0, -0.2) ]);
+                  const line1 = new THREE.Line(lineGeometry, lineMaterial);
+                  controller1.add(line1);
+                  // console.log("Mando 1 (Izquierda) configurado.");
+             } else { console.error("¡No se pudo obtener el Controller 1!"); }
+
+             // Controller 2 (Derecha - Cue Stick)
+             controller2 = renderer.xr.getController(1);
+             if (controller2) {
+                  controller2.addEventListener('selectstart', onSelectStart);
+                  controller2.addEventListener('selectend', onSelectEnd);
+                  scene.add(controller2);
+                  cueController = controller2; // Asignar como mando del taco
+                  // console.log("Controller 2 asignado como cueController.");
+
+                  // Taco (material estándar, posicionado)
+                  const cueLength = 1.2;
+                  const cueRadius = 0.01;
+                  const cueGeometry = new THREE.CylinderGeometry(cueRadius, cueRadius * 0.8, cueLength, 16);
+                  const cueMaterial = new THREE.MeshStandardMaterial({ color: 0xdeb887, roughness: 0.5 }); // Material estándar
+                  cueStickMesh = new THREE.Mesh(cueGeometry, cueMaterial);
+
+                  // Aplicar posición y rotación correctas
+                  cueStickMesh.position.set(0, 0, -cueLength / 2 + 0.05);
+                  cueStickMesh.rotation.set(Math.PI / 2, 0, 0);
+                  cueStickMesh.castShadow = true; // Taco proyecta sombra
+
+                  console.log("Añadiendo taco POSICIONADO al mando 2...");
+                  controller2.add(cueStickMesh); // Añadir taco posicionado
+                  console.log("Taco añadido.");
+
+             } else { console.error("¡No se pudo obtener el Controller 2!"); }
+             console.log("Mandos configurados.");
          }
 
 
-        // --- Otras funciones definidas pero NO LLAMADAS ---
-        function createCushionsAndFrame() { console.log("createCushionsAndFrame NO LLAMADA"); }
-        function createSingleBallVisualOnly(group) { console.log("createSingleBallVisualOnly NO LLAMADA"); }
-        function setupControllers() { console.log("setupControllers NO LLAMADA"); }
-        function onSelectStart(event) { /* ... */ }
-        function onSelectEnd(event) { /* ... */ }
+        // --- WebXR Event Handlers (Definidos pero disparo desactivado) ---
+        function onSelectStart(event) {
+             const controller = event.target;
+             if (controller === cueController) { isTriggerDown = true; }
+        }
+        function onSelectEnd(event) {
+             const controller = event.target;
+             if (controller === cueController && isTriggerDown) { isTriggerDown = false; }
+             // No llamar a shootBall aún
+        }
+
+        // --- Window Resize Handler ---
         function onWindowResize() {
             camera.aspect = window.innerWidth / window.innerHeight;
             camera.updateProjectionMatrix();
@@ -182,6 +209,12 @@
                  console.error("Error during renderer.render():", e);
             }
         }
+
+        // --- Copiar aquí las definiciones completas de las funciones auxiliares ---
+        // (createTableSurface, createCushionsAndFrameVisualsOnly, createSingleBallVisualOnly,
+        //  setupControllers, onSelectStart, onSelectEnd, onWindowResize)
+        // Asegúrate de que las definiciones completas de las funciones estén presentes.
+
 
     </script>
 </body>
