@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
     <meta charset="utf-8">
-    <title>WebXR Billar Passthrough (Paso 27 Rev B - Corregir Disparo)</title> <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>WebXR Billar Passthrough (Paso 27 Rev C - Logs Eventos Mando)</title> <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
     <style>
         body { margin: 0; overflow: hidden; font-family: monospace; background-color: #000; }
         canvas { display: block; }
@@ -40,9 +40,9 @@
         let cueBall;
         let initialBallPositions = {};
         let controller1, controller2;
-        let cueController = null;
+        let cueController = null; // Mando asignado para disparar
         let cueStickMesh;
-        let isTriggerDown = false;
+        let isTriggerDown = false; // Flag para saber si el gatillo está pulsado
         let ballMaterial, cushionMaterial, tableMaterial;
         let cm_ball_ball, cm_ball_cushion, cm_ball_table;
         let score = 0;
@@ -50,7 +50,7 @@
         let hitYellowAfterStrokeStart = false;
         let hitRedAfterStrokeStart = false;
         let cushionHitsThisStroke = 0;
-        const stopVelocityThreshold = 0.01; // Umbral para considerar parada en checkStrokeEnd
+        const stopVelocityThreshold = 0.01;
 
         // Constants
         // ... (igual que antes) ...
@@ -68,7 +68,7 @@
 
         // --- Initialization ---
         function init() {
-            console.log("Iniciando escena WebXR Billar (Paso 27 Rev B)...");
+            console.log("Iniciando escena WebXR Billar (Paso 27 Rev C)...");
             // ... (Setup igual que antes) ...
             scene = new THREE.Scene();
             camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 100);
@@ -99,7 +99,7 @@
             world = new CANNON.World();
             world.gravity.set(0, -9.82, 0);
             world.broadphase = new CANNON.SAPBroadphase(world);
-            world.allowSleep = true; // Permitir que los cuerpos duerman
+            world.allowSleep = true;
             world.solver.iterations = 15;
 
             // Physics Materials Setup & Contact Materials
@@ -121,22 +121,17 @@
             createCushionsAndFrame();
 
             // --- Create Balls (Visuals + Physics) ---
-            createBalls(); // Llamar a la función para crear las 3 bolas
+            createBalls();
 
             // --- Setup Controllers ---
-            setupControllers();
+            setupControllers(); // Asigna cueController aquí
 
             // --- Event Listeners ---
             window.addEventListener('resize', onWindowResize, false);
 
             // --- Start Animation Loop ---
             renderer.setAnimationLoop(animate);
-            console.log("Inicialización completa. Iniciando bucle de animación (Paso 27 Rev B)...");
-
-             // ***** TEST IMPULSE REMOVED *****
-             // console.log("Aplicando impulso de prueba...");
-             // if (cueBall && cueBall.body) { ... } else { ... }
-             // ********************************
+            console.log("Inicialización completa. Iniciando bucle de animación (Paso 27 Rev C)...");
         }
 
         // Función para superficie de mesa (visual + física)
@@ -144,86 +139,107 @@
         // Función para cojines/marco (visual + física)
         function createCushionsAndFrame() { /* ... (definición completa como antes) ... */ }
         // --- Create Balls Function (Visual + Physics) ---
-        function createBalls() { /* ... (definición completa como antes, sin logs extra) ... */
-             const sphereGeometry = new THREE.SphereGeometry(ballRadius, 32, 32);
-             const damping = 0.15;
-             const ballYPos = ballRadius;
-             const ballData = [
-                 { name: 'white', color: 0xffffff, x: 0, z: tableHeight * 0.25 },
-                 { name: 'yellow', color: 0xffff00, x: tableWidth * 0.2, z: -tableHeight * 0.25 },
-                 { name: 'red', color: 0xff0000, x: -tableWidth * 0.2, z: -tableHeight * 0.25 }
-             ];
-             balls.length = 0;
-             initialBallPositions = {};
-             // console.log("--- Entrando a createBalls() ---");
-             ballData.forEach(data => {
-                 // console.log(` > Procesando bola: ${data.name}`);
-                 const material = new THREE.MeshStandardMaterial({ color: data.color, roughness: 0.1, metalness: 0.1 });
-                 const mesh = new THREE.Mesh(sphereGeometry, material);
-                 mesh.position.set(data.x, ballYPos, data.z);
-                 mesh.castShadow = true;
-                 tableGroup.add(mesh);
-                 try {
-                     const shape = new CANNON.Sphere(ballRadius);
-                     const body = new CANNON.Body({ mass: ballMass, material: ballMaterial, shape: shape, linearDamping: damping, angularDamping: damping, allowSleep: true, sleepSpeedLimit: 0.1, sleepTimeLimit: 1.0 });
-                     const worldPos = tableGroup.localToWorld(mesh.position.clone());
-                     body.position.copy(worldPos);
-                     body.addEventListener('collide', onCollision);
-                     world.addBody(body);
-                     const ballInfo = { mesh: mesh, body: body, name: data.name };
-                     balls.push(ballInfo);
-                     if (data.name === 'white') {
-                         // console.log(` > Asignando cueBall para ${data.name}...`);
-                         cueBall = ballInfo;
-                         // console.log(' > cueBall asignada DENTRO del if:', cueBall);
-                     }
-                     initialBallPositions[data.name] = { mesh: mesh.position.clone(), body: body.position.clone() };
-                 } catch (e) { console.error(`Error creando cuerpo físico para ${data.name}:`, e); }
-             });
-             // console.log("--- Saliendo de createBalls() ---");
+        function createBalls() { /* ... (definición completa como antes) ... */ }
+
+        // --- Setup Controllers (Con taco posicionado y LOGS) ---
+        function setupControllers() {
+            console.log("Configurando mandos...");
+            // Controller 1 (¿Derecha?)
+            controller1 = renderer.xr.getController(0);
+            if (controller1) {
+                 controller1.addEventListener('selectstart', onSelectStart);
+                 controller1.addEventListener('selectend', onSelectEnd);
+                 scene.add(controller1);
+                 // ***** ASIGNAR controller1 como CUE *****
+                 cueController = controller1;
+                 console.log("Controller 1 asignado como cueController.");
+
+                 // Añadir taco a controller1
+                 const cueLength = 1.2;
+                 const cueRadius = 0.01;
+                 const cueGeometry = new THREE.CylinderGeometry(cueRadius, cueRadius * 0.8, cueLength, 16);
+                 const cueMaterial = new THREE.MeshStandardMaterial({ color: 0xdeb887, roughness: 0.5 });
+                 cueStickMesh = new THREE.Mesh(cueGeometry, cueMaterial);
+                 cueStickMesh.position.set(0, 0, -cueLength / 2 + 0.05);
+                 cueStickMesh.rotation.set(Math.PI / 2, 0, 0);
+                 cueStickMesh.castShadow = true;
+                 controller1.add(cueStickMesh);
+                 console.log("Taco añadido a Controller 1.");
+            } else { console.error("¡No se pudo obtener el Controller 1!"); }
+
+            // Controller 2 (¿Izquierda?)
+            controller2 = renderer.xr.getController(1);
+            if (controller2) {
+                 // Añadir listeners también por si acaso la mano está invertida
+                 controller2.addEventListener('selectstart', onSelectStart);
+                 controller2.addEventListener('selectend', onSelectEnd);
+                 scene.add(controller2);
+                 // Añadir línea visual
+                 const lineMaterial = new THREE.LineBasicMaterial({ color: 0xcccccc });
+                 const lineGeometry = new THREE.BufferGeometry().setFromPoints([ new THREE.Vector3(0, 0, 0), new THREE.Vector3(0, 0, -0.2) ]);
+                 const line2 = new THREE.Line(lineGeometry, lineMaterial);
+                 controller2.add(line2);
+                 console.log("Mando 2 configurado con línea.");
+            } else { console.error("¡No se pudo obtener el Controller 2!"); }
+
+            console.log("Mandos configurados. cueController es:", cueController === controller1 ? "Controller 1 (índice 0)" : cueController === controller2 ? "Controller 2 (índice 1)" : "NINGUNO");
         }
-        // --- Setup Controllers (Con taco posicionado) ---
-        function setupControllers() { /* ... (definición completa como antes) ... */ }
 
 
-        // --- WebXR Event Handlers ---
+        // --- WebXR Event Handlers con LOGS ---
         function onSelectStart(event) {
              const controller = event.target;
-             if (controller === cueController) { isTriggerDown = true; }
+             console.log(`>>> Evento: selectstart detectado en ${controller === controller1 ? 'Controller 1' : controller === controller2 ? 'Controller 2' : 'Desconocido'}`); // LOG QUÉ MANDO
+
+             if (controller === cueController) {
+                 console.log("   > Es el cueController. Estableciendo isTriggerDown = true"); // LOG CONFIRMACIÓN
+                 isTriggerDown = true;
+             } else {
+                 console.log("   > NO es el cueController. Ignorando."); // LOG IGNORADO
+             }
         }
         function onSelectEnd(event) {
              const controller = event.target;
+             console.log(`>>> Evento: selectend detectado en ${controller === controller1 ? 'Controller 1' : controller === controller2 ? 'Controller 2' : 'Desconocido'}`); // LOG QUÉ MANDO
+
+             // Comprobar condición para llamar a shootBall
+             console.log(`   > Comprobando condición: controller === cueController (${controller === cueController}) && isTriggerDown (${isTriggerDown})`);
              if (controller === cueController && isTriggerDown) {
-                 isTriggerDown = false;
-                 console.log(">>> Trigger Released - Intentando disparar...");
+                 isTriggerDown = false; // Resetear flag PRIMERO
+                 console.log("   > Condición CUMPLIDA. Llamando a shootBall()...");
                  shootBall(); // Llamar a la función de disparo
+             }
+             // Logs para saber por qué no se cumple la condición
+             else if (controller !== cueController) {
+                 console.log("   > Condición NO CUMPLIDA: El evento vino del mando incorrecto.");
+             } else if (!isTriggerDown) {
+                  console.log("   > Condición NO CUMPLIDA: El trigger no estaba pulsado (isTriggerDown=false).");
              }
         }
 
         // --- Billiards Logic Functions ---
-
-        // shootBall Function - CON COMPROBACIÓN isQuiet MODIFICADA (como en Paso 27 original)
+        // shootBall Function - CON COMPROBACIÓN isQuiet MODIFICADA (como en Paso 27)
         function shootBall() {
-            console.log("--- Entrando a shootBall() ---");
+            console.log("--- Entrando a shootBall() ---"); // Log entrada a shootBall
             if (!cueBall || !cueBall.body) { console.error("Error: cueBall o cueBall.body no definido."); return; }
-            if (!cueController) { console.error("Error: cueController no definido."); return; }
+            // Ya no necesitamos cueController aquí dentro si la comprobación se hace en onSelectEnd
+            // if (!cueController) { console.error("Error: cueController no definido."); return; }
             console.log("Estado actual: isStrokeInProgress =", isStrokeInProgress);
 
-            // ***** Comprobación de quietud MÁS PERMISIVA *****
+            // Comprobación de quietud MÁS PERMISIVA
             let allQuiet = true;
-            const quietCheckThreshold = 0.3; // Umbral de velocidad^2 más alto (antes 0.1)
-            console.log(`Comprobando si las bolas están quietas (Umbral Vel^2 < ${quietCheckThreshold} O Sleeping):`);
+            const quietCheckThreshold = 0.3;
+            // console.log(`Comprobando si las bolas están quietas (Umbral Vel^2 < ${quietCheckThreshold} O Sleeping):`); // Log menos verboso
             balls.forEach((b, index) => {
                 const sleep = b.body.sleepState === CANNON.Body.SLEEPING;
-                if (sleep) { return; } // Si duerme, está quieta
+                if (sleep) { return; }
                 const vel = b.body.velocity.lengthSquared();
                 if (vel > quietCheckThreshold) {
-                    console.log(` > Bola ${index} AÚN SE MUEVE (Vel^2 = ${vel.toFixed(4)})`);
+                    // console.log(` > Bola ${index} AÚN SE MUEVE (Vel^2 = ${vel.toFixed(4)})`);
                     allQuiet = false;
                 }
             });
             console.log("Resultado de isQuiet (Umbral Relajado):", allQuiet);
-            // ***** FIN CAMBIO *****
 
             if (!allQuiet || isStrokeInProgress) {
                 console.log("CONDICIÓN DE DISPARO NO CUMPLIDA:", !allQuiet ? "Bolas en movimiento." : "", isStrokeInProgress ? "Tiro ya en progreso." : "");
@@ -231,9 +247,9 @@
             }
 
             // 1. Obtener dirección del taco (mando)
-            // ... (igual que antes) ...
             const aimDirection = new THREE.Vector3();
             try {
+                 // Usar cueController (que debería ser controller1 ahora)
                  cueController.getWorldDirection(aimDirection);
                  aimDirection.y = 0;
                  aimDirection.normalize();
@@ -241,10 +257,8 @@
 
             // 2. Magnitud de Impulso (fija por ahora)
             const impulseMagnitude = 0.8;
-
             // 3. Punto de Golpeo (centro por ahora)
             const hitOffset = new CANNON.Vec3(0, 0, 0);
-
             // 4. Aplicar Impulso
             const impulse = new CANNON.Vec3( aimDirection.x * impulseMagnitude, 0, aimDirection.z * impulseMagnitude );
             console.log("Aplicando impulso:", impulse);
@@ -263,35 +277,18 @@
             console.log("--- Saliendo de shootBall() ---");
         }
 
-        // onCollision Function - REACTIVADA (básica)
+        // onCollision Function
         function onCollision(event) { /* ... (definición completa como antes) ... */ }
-        // resetBall Function - REACTIVADA
+        // resetBall Function
         function resetBall(ball) { /* ... (definición completa como antes) ... */ }
-        // checkBallsFallen Function - REACTIVADA
+        // checkBallsFallen Function
         function checkBallsFallen() { /* ... (definición completa como antes) ... */ }
-         // checkStrokeEnd Function - REACTIVADA
+         // checkStrokeEnd Function
          function checkStrokeEnd() { /* ... (definición completa como antes) ... */ }
-
-
         // --- Window Resize Handler ---
         function onWindowResize() { /* ... (definición completa como antes) ... */ }
-
         // --- Animation Loop ---
-        function animate() {
-            // Update Physics World
-            if (world) {
-                try { world.step(timeStep); } catch (e) { console.error("Error during world.step():", e); }
-            }
-
-            // Sync visuals with physics
-            balls.forEach(ball => { /* ... (definición completa como antes) ... */ });
-
-            // Check game state
-            try { checkBallsFallen(); checkStrokeEnd(); } catch (e) { console.error("Error during game state checks:", e); }
-
-            // Render Scene
-            try { renderer.render(scene, camera); } catch (e) { console.error("Error during renderer.render():", e); }
-        }
+        function animate() { /* ... (definición completa como antes) ... */ }
 
         // --- Copiar aquí las definiciones completas de las funciones auxiliares ---
         // (createTableSurface, createCushionsAndFrame, createBalls, setupControllers,
@@ -299,8 +296,8 @@
         //  checkStrokeEnd, onWindowResize, shootBall, animate)
         // Asegúrate de que las definiciones completas de las funciones estén presentes.
 
-
     </script>
 </body>
 </html>
+
 
