@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
     <meta charset="utf-8">
-    <title>WebXR Billar Passthrough (Paso 16 Modificado - Forzar Disparo)</title> <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>WebXR Billar Passthrough (Paso 16 + Test Impulso Init)</title> <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
     <style>
         body { margin: 0; overflow: hidden; font-family: monospace; background-color: #000; }
         canvas { display: block; }
@@ -68,7 +68,7 @@
 
         // --- Initialization ---
         function init() {
-            console.log("Iniciando escena WebXR Billar (Paso 16 Modificado)...");
+            console.log("Iniciando escena WebXR Billar (Paso 16 + Test Impulso Init)...");
             // ... (Setup igual que Paso 16) ...
             scene = new THREE.Scene();
             camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 100);
@@ -131,7 +131,25 @@
 
             // --- Start Animation Loop ---
             renderer.setAnimationLoop(animate);
-            console.log("Inicialización completa. Iniciando bucle de animación (Paso 16 Modificado)...");
+            console.log("Inicialización completa. Aplicando impulso de prueba...");
+
+            // ***** TEST: Aplicar impulso directamente al final de init *****
+            if (cueBall && cueBall.body) {
+                console.log("Aplicando TEST impulse en init...");
+                const testImpulse = new CANNON.Vec3(0, 0, -0.3); // Impulso pequeño hacia adelante (-Z world)
+                const testOffset = new CANNON.Vec3(0, 0, 0); // Golpear en el centro
+                try {
+                    cueBall.body.wakeUp(); // Despertar la bola
+                    cueBall.body.applyImpulse(testImpulse, testOffset);
+                    console.log("TEST impulse aplicado en init.");
+                } catch (e) {
+                    console.error("Error aplicando TEST impulse en init:", e);
+                }
+            } else {
+                console.error("Cannot apply TEST impulse: cueBall o cueBall.body no están listos al final de init.");
+            }
+            // ***** FIN TEST *****
+
         }
 
         // Función para superficie de mesa (visual + física)
@@ -153,73 +171,62 @@
              const controller = event.target;
              if (controller === cueController && isTriggerDown) {
                  isTriggerDown = false;
-                 console.log(">>> Trigger Released - Intentando disparar (FORZADO)..."); // Log disparo
-                 shootBall(); // Llamar a la función de disparo
+                 console.log(">>> Trigger Released - Intentando disparar (CHECKS ACTIVOS)..."); // Log original
+                 shootBall(); // Llamar a la función de disparo original (no debería funcionar si bolas no quietas)
              }
         }
 
         // --- Billiards Logic Functions ---
 
-        // shootBall Function - SIN COMPROBACIONES isQuiet/isStrokeInProgress
+        // shootBall Function - ORIGINAL de Paso 16 (con checks, no debería disparar inicialmente)
         function shootBall() {
-            console.log("--- Entrando a shootBall() (CHECKS DESACTIVADOS) ---");
+            console.log("--- Entrando a shootBall() ---");
             if (!cueBall || !cueBall.body) { console.error("Error: cueBall o cueBall.body no definido."); return; }
             if (!cueController) { console.error("Error: cueController no definido."); return; }
+            console.log("Estado actual: isStrokeInProgress =", isStrokeInProgress);
 
-            // ***** CAMBIO DEBUG: Comprobaciones comentadas *****
-            /*
-            // console.log("Estado actual: isStrokeInProgress =", isStrokeInProgress);
-            // let allQuiet = true;
-            // const quietCheckThreshold = stopVelocityThreshold * 10;
-            // console.log(`Comprobando si las bolas están quietas (Umbral Vel^2 < ${quietCheckThreshold}):`);
-            // balls.forEach((b, index) => {
-            //     const vel = b.body.velocity.lengthSquared();
-            //     const sleep = b.body.sleepState === CANNON.Body.SLEEPING;
-            //     // console.log(` > Bola ${index}: Vel^2=${vel.toFixed(4)}, SleepState=${sleep}`);
-            //     if (!sleep && vel > quietCheckThreshold) {
-            //         allQuiet = false;
-            //     }
-            // });
-            // console.log("Resultado de isQuiet:", allQuiet);
+            // Comprobar si las bolas están quietas (usando umbral original * 10)
+            let allQuiet = true;
+            const quietCheckThreshold = stopVelocityThreshold * 10; // 0.1
+            console.log(`Comprobando si las bolas están quietas (Umbral Vel^2 < ${quietCheckThreshold}):`);
+            balls.forEach((b, index) => {
+                const vel = b.body.velocity.lengthSquared();
+                const sleep = b.body.sleepState === CANNON.Body.SLEEPING;
+                console.log(` > Bola ${index}: Vel^2=${vel.toFixed(4)}, SleepState=${sleep}`);
+                if (!sleep && vel > quietCheckThreshold) {
+                    allQuiet = false;
+                }
+            });
+            console.log("Resultado de isQuiet:", allQuiet);
 
-            // if (!allQuiet || isStrokeInProgress) {
-            //     console.log("CONDICIÓN DE DISPARO NO CUMPLIDA (CHECKS ACTIVOS):", !allQuiet ? "Bolas en movimiento." : "", isStrokeInProgress ? "Tiro ya en progreso." : "");
-            //     return; // Salir si no se cumplen las condiciones
-            // }
-            */
-            // ***** FIN CAMBIO DEBUG *****
+            if (!allQuiet || isStrokeInProgress) {
+                console.log("CONDICIÓN DE DISPARO NO CUMPLIDA:", !allQuiet ? "Bolas en movimiento." : "", isStrokeInProgress ? "Tiro ya en progreso." : "");
+                return;
+            }
 
-            console.log("CHECKS DE QUIETUD/STROKE DESACTIVADOS PARA DEBUG!");
-
-            // 1. Obtener dirección del taco (mando)
+            // ... (resto de la función shootBall original para aplicar impulso basado en mando) ...
             const aimDirection = new THREE.Vector3();
             try {
                  cueController.getWorldDirection(aimDirection);
-                 aimDirection.y = 0; // Proyectar sobre plano XZ
+                 aimDirection.y = 0;
                  aimDirection.normalize();
+                 console.log("Dirección de apuntado (normalizada):", aimDirection.x.toFixed(3), aimDirection.y.toFixed(3), aimDirection.z.toFixed(3));
             } catch (e) { console.error("Error obteniendo dirección del mando:", e); return; }
-
-            // 2. Magnitud de Impulso (fija por ahora)
-            const impulseMagnitude = 0.8; // Puedes ajustar este valor
-
-            // 3. Punto de Golpeo (centro por ahora)
+            const impulseMagnitude = 0.8;
             const hitOffset = new CANNON.Vec3(0, 0, 0);
-
-            // 4. Aplicar Impulso
             const impulse = new CANNON.Vec3( aimDirection.x * impulseMagnitude, 0, aimDirection.z * impulseMagnitude );
-            console.log("Aplicando impulso:", impulse);
+            console.log("Aplicando impulso:", impulse, "en offset:", hitOffset);
             try {
-                cueBall.body.wakeUp(); // Asegurarse de que no esté dormida
+                cueBall.body.wakeUp();
                 cueBall.body.applyImpulse(impulse, hitOffset);
                 console.log("Impulso aplicado a cueBall.body.");
+                console.log("Velocidad cueBall INMEDIATAMENTE después:", cueBall.body.velocity);
             } catch(e) { console.error("¡Error al aplicar impulso!", e); return; }
-
-            // 5. Iniciar seguimiento del tiro (IMPORTANTE para lógica de colisión/puntuación)
             isStrokeInProgress = true;
             hitYellowAfterStrokeStart = false;
             hitRedAfterStrokeStart = false;
             cushionHitsThisStroke = 0;
-            console.log(`¡Disparo Forzado Realizado! Fuerza: ${impulseMagnitude.toFixed(2)}. Stroke iniciado.`);
+            console.log(`¡Disparo Realizado! Fuerza: ${impulseMagnitude.toFixed(2)}. Stroke iniciado.`);
             console.log("--- Saliendo de shootBall() ---");
         }
 
@@ -263,5 +270,6 @@
     </script>
 </body>
 </html>
+
 
 
