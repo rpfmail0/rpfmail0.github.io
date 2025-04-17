@@ -3,11 +3,10 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>WebXR Passthrough - Cubo Flotante</title>
+    <title>WebXR Passthrough - Mover Cubo</title>
     <style>
         body { margin: 0; overflow: hidden; font-family: sans-serif; }
         canvas { display: block; }
-        /* El ARButton se posiciona automáticamente, pero podemos ajustar si es necesario */
         #ar-button {
             position: absolute;
             bottom: 20px;
@@ -27,78 +26,77 @@
     </script>
 
     <script type="module">
-        // ***** CAMBIO: Importar ARButton en lugar de VRButton *****
         import * as THREE from 'three';
         import { ARButton } from 'three/addons/webxr/ARButton.js';
 
         let camera, scene, renderer;
         let cube;
+        // ***** NUEVO: Variables para interacción *****
+        let controller1, controller2; // Referencias a los mandos
+        let raycaster; // Para detectar intersecciones
+        const intersected = []; // Array temporal para objetos intersectados
+        let tempMatrix = new THREE.Matrix4(); // Matriz temporal para cálculos
+        let grabbingController = null; // Mando que está agarrando actualmente
+        let grabbedObject = null; // Objeto que está siendo agarrado
+
+        init(); // Llamar a init primero
 
         // Función de inicialización
         function init() {
-            // Crear escena
-            scene = new THREE.Scene();
-            // ***** CAMBIO: Fondo nulo para permitir passthrough *****
-            // Ya no establecemos un color de fondo para la escena.
-            // scene.background = new THREE.Color(0x505050); // <- Línea eliminada/comentada
+            scene = new THREE.Scene(); // Crear escena
+            // Fondo nulo para passthrough (ya no se establece color)
 
-            // Crear cámara (para la vista no-AR/VR inicial)
-            // Sigue siendo útil para la vista previa 2D antes de entrar en AR.
             camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
-            camera.position.set(0, 1.6, 3); // Posición inicial arbitraria para vista 2D
+            camera.position.set(0, 1.6, 3);
 
-            // Crear renderer WebGL
-            // ***** CAMBIO: Habilitar alpha para transparencia *****
-            renderer = new THREE.WebGLRenderer({
-                antialias: true,
-                alpha: true // <-- Necesario para que el canvas sea transparente
-            });
+            renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
             renderer.setSize(window.innerWidth, window.innerHeight);
             renderer.setPixelRatio(window.devicePixelRatio);
-
-            // ***** CAMBIO: Establecer alfa de limpieza a 0 *****
-            // Asegura que el fondo del canvas sea completamente transparente.
             renderer.setClearAlpha(0);
-
+            renderer.xr.enabled = true; // Habilitar WebXR
             document.body.appendChild(renderer.domElement);
 
-            // Habilitar WebXR (necesario para AR también)
-            renderer.xr.enabled = true;
-
-            // ***** CAMBIO: Añadir ARButton *****
-            // ARButton solicitará una sesión 'immersive-ar' que habilita passthrough si está disponible.
-            const arButton = ARButton.createButton(renderer, {
-                // Opcional: Puedes requerir características aquí si es necesario,
-                // pero ARButton suele pedir 'local-floor' por defecto.
-                // requiredFeatures: ['local-floor']
-            });
-            arButton.id = 'ar-button'; // Asignar ID para CSS
+            const arButton = ARButton.createButton(renderer);
+            arButton.id = 'ar-button';
             document.body.appendChild(arButton);
 
-
             // --- Crear el Cubo ---
-            // La creación y posicionamiento del cubo no cambian.
-            const geometry = new THREE.BoxGeometry(0.5, 0.5, 0.5); // Un poco más pequeño quizás
+            const geometry = new THREE.BoxGeometry(0.3, 0.3, 0.3); // Más pequeño para agarrar mejor
             const material = new THREE.MeshStandardMaterial({
-                color: 0x00ff00, // Verde
+                color: 0x00ffff, // Cian
                 roughness: 0.7,
                 metalness: 0.1
              });
             cube = new THREE.Mesh(geometry, material);
-
-            // Posicionar el cubo frente al origen (0,0,0) del espacio AR.
-            // (0, 1.6, -2) -> Aprox. altura ojos, 2m delante. Ajusta según necesites.
-            cube.position.set(0, 1.6, -2);
+            cube.position.set(0, 1.6, -1.5); // Más cerca para empezar
             scene.add(cube);
 
             // --- Añadir Luces ---
-            // Las luces siguen siendo importantes para iluminar el cubo virtual.
-            const ambientLight = new THREE.AmbientLight(0xffffff, 1.5); // Luz ambiental más brillante
+            const ambientLight = new THREE.AmbientLight(0xffffff, 1.5);
             scene.add(ambientLight);
-
-            const directionalLight = new THREE.DirectionalLight(0xffffff, 2.0); // Luz direccional más intensa
+            const directionalLight = new THREE.DirectionalLight(0xffffff, 2.0);
             directionalLight.position.set(1, 1, 1).normalize();
             scene.add(directionalLight);
+
+            // ***** NUEVO: Configuración de Mandos *****
+            // Mando 1 (generalmente mano derecha)
+            controller1 = renderer.xr.getController(0);
+            controller1.addEventListener('selectstart', onSelectStart);
+            controller1.addEventListener('selectend', onSelectEnd);
+            scene.add(controller1);
+
+            // Mando 2 (generalmente mano izquierda)
+            controller2 = renderer.xr.getController(1);
+            controller2.addEventListener('selectstart', onSelectStart);
+            controller2.addEventListener('selectend', onSelectEnd);
+            scene.add(controller2);
+
+            // Opcional: Añadir modelos visuales para los mandos
+            // (Requiere importar 'XRControllerModelFactory' y modelos glTF)
+            // Por simplicidad, no los añadimos ahora, pero los mandos funcionan igual.
+
+            // ***** NUEVO: Configuración de Raycaster *****
+            raycaster = new THREE.Raycaster();
 
             // --- Eventos ---
             window.addEventListener('resize', onWindowResize);
@@ -107,26 +105,67 @@
             renderer.setAnimationLoop(animate);
         }
 
-        // Función para manejar el redimensionamiento de la ventana
+        // ***** NUEVO: Manejador para inicio de selección (gatillo pulsado) *****
+        function onSelectStart(event) {
+            const controller = event.target; // Mando que disparó el evento
+
+            // 1. Comprobar si ya estamos agarrando algo con ESTE mando
+            if (grabbingController === controller) return; // Ya está agarrando, no hacer nada
+
+            // 2. Lanzar un rayo desde el mando
+            tempMatrix.identity().extractRotation(controller.matrixWorld); // Obtener orientación del mando
+            raycaster.ray.origin.setFromMatrixPosition(controller.matrixWorld); // Origen del rayo = posición del mando
+            raycaster.ray.direction.set(0, 0, -1).applyMatrix4(tempMatrix); // Dirección = hacia adelante (-Z local)
+
+            // 3. Buscar intersecciones con el cubo (y otros objetos si los hubiera)
+            const intersects = raycaster.intersectObject(cube); // Comprobar solo con el cubo
+
+            if (intersects.length > 0) {
+                // 4. ¡Intersección encontrada! Agarrar el objeto
+                grabbedObject = intersects[0].object; // El objeto intersectado (nuestro cubo)
+
+                // 5. "Adjuntar" el objeto al mando usando attach()
+                // attach() preserva la transformación mundial del objeto
+                controller.attach(grabbedObject);
+
+                // 6. Marcar este mando como el que está agarrando
+                grabbingController = controller;
+            }
+        }
+
+        // ***** NUEVO: Manejador para fin de selección (gatillo soltado) *****
+        function onSelectEnd(event) {
+            const controller = event.target; // Mando que disparó el evento
+
+            // Comprobar si ESTE mando era el que estaba agarrando algo
+            if (grabbingController === controller && grabbedObject) {
+                // "Desadjuntar" el objeto del mando y adjuntarlo de nuevo a la escena
+                // attach() preserva la transformación mundial al moverlo a la escena
+                scene.attach(grabbedObject);
+
+                // Limpiar las variables de estado
+                grabbedObject = null;
+                grabbingController = null;
+            }
+        }
+
         function onWindowResize() {
             camera.aspect = window.innerWidth / window.innerHeight;
             camera.updateProjectionMatrix();
             renderer.setSize(window.innerWidth, window.innerHeight);
         }
 
-        // Bucle de animación
         function animate() {
-            // Rotar el cubo en cada frame
-            cube.rotation.x += 0.01;
-            cube.rotation.y += 0.01;
+            // La rotación se detiene mientras se agarra para no interferir
+            if (!grabbingController) {
+                 cube.rotation.x += 0.01;
+                 cube.rotation.y += 0.01;
+            }
 
-            // Renderizar la escena. Three.js usa la cámara XR correcta (VR o AR) automáticamente.
             renderer.render(scene, camera);
         }
-
-        // Iniciar todo cuando la página cargue
-        init();
 
     </script>
 </body>
 </html>
+
