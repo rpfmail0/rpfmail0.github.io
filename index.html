@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
     <meta charset="utf-8">
-    <title>WebXR Billar Passthrough (Debug 14 - Añadir Mandos)</title>
+    <title>WebXR Billar Passthrough (Debug 15 - Posicionar Taco)</title>
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
     <style>
         body { margin: 0; overflow: hidden; font-family: monospace; background-color: #000; }
@@ -33,11 +33,11 @@
         let camera, scene, renderer;
         let tableGroup; // Contenedor
 
-        // ***** REINTRODUCIDO: Variables de Mandos *****
+        // WebXR Controller Variables
         let controller1, controller2;
         let cueController = null;
         let cueStickMesh; // Visual del taco
-        let isTriggerDown = false; // Estado del gatillo
+        let isTriggerDown = false;
 
         // Constants
         const ballRadius = 0.03075;
@@ -52,7 +52,7 @@
 
         // --- Initialization ---
         function init() {
-            console.log("Iniciando escena WebXR Billar (Debug - Paso 14: Añadir Mandos)...");
+            console.log("Iniciando escena WebXR Billar (Debug - Paso 15: Posicionar Taco)...");
 
             scene = new THREE.Scene();
             camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 100);
@@ -83,7 +83,7 @@
             tableGroup = new THREE.Group();
             tableGroup.position.set(0, tableSurfaceY, -1.5);
             scene.add(tableGroup);
-            console.log("Table group creado en Y:", tableSurfaceY);
+            // console.log("Table group creado en Y:", tableSurfaceY);
 
             // --- Crear Superficie Visual de la Mesa (Tapete) ---
             createTableSurfaceVisualOnly(tableGroup);
@@ -94,20 +94,19 @@
             // --- Crear SOLO UNA BOLA VISUAL ---
             createSingleBallVisualOnly(tableGroup);
 
-            // --- Configurar Mandos - REINTRODUCIDO ---
-            setupControllers();
+            // --- Configurar Mandos ---
+            setupControllers(); // Ahora posiciona el taco
 
             // --- Event Listeners ---
             window.addEventListener('resize', onWindowResize, false);
 
             // --- Start Animation Loop ---
             renderer.setAnimationLoop(animate);
-            console.log("Inicialización con mandos visuales completa (Paso 14).");
+            console.log("Inicialización con taco posicionado completa (Paso 15).");
         }
 
         // --- Función para crear solo la superficie visual ---
         function createTableSurfaceVisualOnly(group) {
-             // console.log("Intentando crear el tapete visual..."); // Menos logs
              const tableGeometry = new THREE.BoxGeometry(tableWidth, tableThickness, tableHeight);
              const material = new THREE.MeshStandardMaterial({ color: 0x006400, roughness: 0.9 });
              const mesh = new THREE.Mesh(tableGeometry, material);
@@ -115,12 +114,10 @@
              mesh.position.y = -tableThickness / 2;
              mesh.receiveShadow = true;
              group.add(mesh);
-             // console.log(" > Malla de tapete añadida al tableGroup.");
          }
 
         // --- Función para crear cojines y marco (SOLO VISUAL) ---
         function createCushionsAndFrameVisualsOnly(group) {
-            // console.log("Intentando crear visuales de cojines y marco..."); // Menos logs
             const cushionYPos = cushionHeight / 2;
             const woodMaterial = new THREE.MeshStandardMaterial({ color: 0x8B4513, roughness: 0.7 });
             const cushionGeometryLong = new THREE.BoxGeometry(tableWidth + 2 * cushionWidth, cushionHeight, cushionWidth);
@@ -136,7 +133,6 @@
                      group.add(cushionMesh);
                  } catch(e) { console.error(`Error creando/añadiendo cojín visual ${index+1}:`, e); }
             });
-            // console.log("Visuales de cojines añadidos.");
 
             try {
                  const baseHeight = 0.15;
@@ -146,14 +142,12 @@
                  baseMesh.castShadow = true;
                  baseMesh.receiveShadow = true;
                  group.add(baseMesh);
-                 // console.log("Base visual añadida.");
             } catch(e) { console.error("Error creando/añadiendo base visual:", e); }
         }
 
 
         // --- Función para crear solo una bola visual ---
         function createSingleBallVisualOnly(group) {
-            // console.log("Intentando crear una única bola visual..."); // Menos logs
             const sphereGeometry = new THREE.SphereGeometry(ballRadius, 32, 32);
             const material = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.1, metalness: 0.1 });
             const mesh = new THREE.Mesh(sphereGeometry, material);
@@ -161,10 +155,9 @@
             mesh.position.set(0, ballYPos, 0);
             mesh.castShadow = true;
             group.add(mesh);
-            // console.log(" > Malla de bola añadida al tableGroup.");
         }
 
-        // --- Setup Controllers - REINTRODUCIDO ---
+        // --- Setup Controllers (Posicionar Taco) ---
         function setupControllers() {
             console.log("Configurando mandos...");
             // Controller 1 (Left Hand - Basic line visual)
@@ -174,36 +167,38 @@
             const lineGeometry = new THREE.BufferGeometry().setFromPoints([ new THREE.Vector3(0, 0, 0), new THREE.Vector3(0, 0, -0.2) ]);
             const line1 = new THREE.Line(lineGeometry, lineMaterial);
             controller1.add(line1);
-            console.log("Mando 1 (Izquierda) configurado con línea.");
+            // console.log("Mando 1 (Izquierda) configurado con línea.");
 
-            // Controller 2 (Right Hand - Cue Stick + Debug Sphere)
+            // Controller 2 (Right Hand - Cue Stick)
             controller2 = renderer.xr.getController(1);
             if (controller2) {
-                 console.log("Controller 2 obtenido.");
+                 // console.log("Controller 2 obtenido.");
                  controller2.addEventListener('selectstart', onSelectStart);
                  controller2.addEventListener('selectend', onSelectEnd);
                  scene.add(controller2);
                  cueController = controller2;
-                 console.log("Mando 2 (Derecha - Cue) configurado con listeners.");
+                 // console.log("Mando 2 (Derecha - Cue) configurado con listeners.");
 
-                 // ***** VISUAL RESTAURADO: Taco original (posición simplificada) *****
+                 // Taco original con posición/rotación
                  const cueLength = 1.2;
                  const cueRadius = 0.01;
                  const cueGeometry = new THREE.CylinderGeometry(cueRadius, cueRadius * 0.8, cueLength, 16);
-                 const cueMaterial = new THREE.MeshStandardMaterial({ color: 0xdeb887, roughness: 0.5 }); // Material original
+                 const cueMaterial = new THREE.MeshStandardMaterial({ color: 0xdeb887, roughness: 0.5 });
                  cueStickMesh = new THREE.Mesh(cueGeometry, cueMaterial);
-                 // ** Añadir taco en el origen del mando SIN rotación/offset inicial **
-                 console.log("Añadiendo taco (material original) al origen del mando 2...");
+
+                 // ***** CAMBIO: Aplicar posición y rotación originales *****
+                 cueStickMesh.position.set(0, 0, -cueLength / 2 + 0.05); // Posicionarlo extendiéndose hacia adelante
+                 cueStickMesh.rotation.set(Math.PI / 2, 0, 0); // Rotarlo para que apunte a lo largo del eje Z del mando
+
+                 console.log("Añadiendo taco (material original) al mando 2 con posición/rotación...");
                  controller2.add(cueStickMesh);
                  console.log("Taco añadido.");
 
-                 // ***** DEBUG: Mantener esfera roja para referencia *****
-                 const debugSphereGeo = new THREE.SphereGeometry(0.03, 16, 16);
-                 const debugSphereMat = new THREE.MeshBasicMaterial({ color: 0xff0000 });
-                 const debugSphere = new THREE.Mesh(debugSphereGeo, debugSphereMat);
-                 console.log("Añadiendo esfera roja de debug al mando 2...");
-                 controller2.add(debugSphere);
-                 console.log("Esfera roja de debug añadida.");
+                 // Quitar esfera roja de debug
+                 // const debugSphereGeo = new THREE.SphereGeometry(0.03, 16, 16);
+                 // const debugSphereMat = new THREE.MeshBasicMaterial({ color: 0xff0000 });
+                 // const debugSphere = new THREE.Mesh(debugSphereGeo, debugSphereMat);
+                 // controller2.add(debugSphere);
 
             } else {
                  console.error("¡No se pudo obtener el Controller 2!");
@@ -211,22 +206,18 @@
         }
 
 
-        // --- WebXR Event Handlers (Aún no hacen nada útil) ---
+        // --- WebXR Event Handlers ---
         function onSelectStart(event) {
             const controller = event.target;
-            // console.log("Evento: selectstart detectado");
             if (controller === cueController) {
                 isTriggerDown = true;
-                // console.log("Cue controller trigger pressed.");
             }
         }
 
         function onSelectEnd(event) {
             const controller = event.target;
-            // console.log("Evento: selectend detectado");
             if (controller === cueController && isTriggerDown) {
                 isTriggerDown = false;
-                // console.log("Cue controller trigger released.");
                 // shootBall(); // Disabled
             }
         }
@@ -254,6 +245,7 @@
     </script>
 </body>
 </html>
+
 
 
 
