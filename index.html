@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
     <meta charset="utf-8">
-    <title>WebXR Billar Passthrough (Debug 3 - Mesa Suelo)</title>
+    <title>WebXR Billar Passthrough (Debug 4 - Física Mesa)</title>
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
     <style>
         body { margin: 0; overflow: hidden; font-family: monospace; background-color: #000; }
@@ -19,6 +19,7 @@
         }
     </style>
 
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/cannon.js/0.6.2/cannon.min.js"></script>
     <script type="importmap">
         {
             "imports": {
@@ -33,15 +34,23 @@
         import * as THREE from 'three';
         import { ARButton } from 'three/addons/webxr/ARButton.js';
 
-        // --- Global Variables (Simplified) ---
+        // --- Global Variables ---
         let camera, scene, renderer;
-        let tableGroup; // Group to hold all table elements for easy positioning
+        // ***** REINTRODUCIDO: Variables de Física *****
+        let world; // Cannon.js world
+        const timeStep = 1 / 60; // Physics timestep
+        const tableParts = []; // Array para cuerpos físicos/mallas de la mesa
+        let tableGroup; // Group to hold all table elements
 
         // WebXR Controller Variables
-        let controller1, controller2; // Controller groups
-        let cueController = null; // Which controller acts as the cue
-        let cueStickMesh; // Visual representation of the cue stick
-        let isTriggerDown = false; // Track trigger state
+        let controller1, controller2;
+        let cueController = null;
+        let cueStickMesh;
+        let isTriggerDown = false;
+
+        // ***** REINTRODUCIDO: Materiales de Física *****
+        let ballMaterial, cushionMaterial, tableMaterial;
+        let cm_ball_ball, cm_ball_cushion, cm_ball_table;
 
         let score = 0; // Gameplay State placeholder
 
@@ -51,20 +60,18 @@
         const tableThickness = 0.01;
         const cushionHeight = 0.05;
         const cushionWidth = 0.05;
-        // ***** CAMBIO: Altura de la mesa ajustada a 0 *****
         const tableSurfaceY = 0.0; // Altura de la superficie de la mesa (nivel del suelo)
 
         init();
 
         // --- Initialization ---
         function init() {
-            console.log("Iniciando escena WebXR Billar (Debug - Paso 3)...");
+            console.log("Iniciando escena WebXR Billar (Debug - Paso 4: Física Mesa)...");
 
             scene = new THREE.Scene();
 
             camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 100);
-            // Ajustar posición inicial de cámara relativa a la nueva altura
-            camera.position.set(0, tableSurfaceY + 1.5, 1); // Sigue siendo 1.5m sobre la superficie
+            camera.position.set(0, tableSurfaceY + 1.5, 1);
 
             renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
             renderer.setSize(window.innerWidth, window.innerHeight);
@@ -79,16 +86,44 @@
             // Lighting
             scene.add(new THREE.AmbientLight(0xAAAAAA));
             const spotLight = new THREE.SpotLight(0xffffff, 0.9, 0, Math.PI / 4, 1);
-             // Ajustar posición de la luz a la nueva altura de la mesa
-            spotLight.position.set(0, tableSurfaceY + 2, -1.5); // 2m sobre la superficie (ahora suelo)
+            spotLight.position.set(0, tableSurfaceY + 2, -1.5);
             scene.add(spotLight);
             const pointLight = new THREE.PointLight(0xffffff, 0.5);
             camera.add(pointLight);
             scene.add(camera);
 
-            // --- Create Billiards Table (Visuals ONLY) ---
+            // --- Physics World (Cannon.js) - REINTRODUCIDO ---
+            if (typeof CANNON === 'undefined') {
+                console.error("ERROR CRÍTICO: Cannon.js no se ha cargado. Asegúrate de que el script tag esté presente y se cargue antes que este módulo.");
+                alert("Error: Falta la librería de físicas (Cannon.js). La simulación no puede continuar.");
+                return; // Detener inicialización si Cannon no está
+            }
+            world = new CANNON.World();
+            world.gravity.set(0, -9.82, 0); // Gravedad estándar
+            world.broadphase = new CANNON.SAPBroadphase(world);
+            world.allowSleep = true;
+            world.solver.iterations = 15;
+            console.log("Mundo físico Cannon.js creado.");
+
+            // Physics Materials Setup - REINTRODUCIDO
+            ballMaterial = new CANNON.Material('ball'); // Aunque no hay bolas, definimos el material
+            cushionMaterial = new CANNON.Material('cushion');
+            tableMaterial = new CANNON.Material('table');
+            console.log("Materiales físicos creados.");
+
+            // Contact Materials - REINTRODUCIDO (Definir cómo interactúan los materiales)
+            // Necesitamos cm_ball_cushion y cm_ball_table aunque no haya bolas, por si acaso
+            cm_ball_ball = new CANNON.ContactMaterial(ballMaterial, ballMaterial, { friction: 0.1, restitution: 0.9 });
+            cm_ball_cushion = new CANNON.ContactMaterial(ballMaterial, cushionMaterial, { friction: 0.15, restitution: 0.7 });
+            cm_ball_table = new CANNON.ContactMaterial(ballMaterial, tableMaterial, { friction: 0.04, restitution: 0.2 });
+
+            world.addContactMaterial(cm_ball_ball);
+            world.addContactMaterial(cm_ball_cushion);
+            world.addContactMaterial(cm_ball_table);
+            console.log("Materiales de contacto añadidos al mundo.");
+
+            // --- Create Billiards Table (Visuals + Physics) ---
             tableGroup = new THREE.Group();
-            // Ajustar posición del grupo de la mesa a la nueva altura (Y=0)
             tableGroup.position.set(0, tableSurfaceY, -1.5);
             scene.add(tableGroup);
 
@@ -97,26 +132,45 @@
             const tableMeshMaterial = new THREE.MeshStandardMaterial({ color: 0x006400, roughness: 0.9 });
             const tableSurfaceMesh = new THREE.Mesh(tableGeometry, tableMeshMaterial);
             tableSurfaceMesh.name = "TableSurface";
-            tableSurfaceMesh.position.y = -tableThickness / 2; // Superficie justo debajo de Y=0 del grupo
+            tableSurfaceMesh.position.y = -tableThickness / 2;
             tableGroup.add(tableSurfaceMesh);
 
-            // Cushions and Frame (Visuals ONLY)
-            createCushionsAndFrameVisualsOnly();
+            // Table Surface (Physics Body) - REINTRODUCIDO
+            const tableShape = new CANNON.Box(new CANNON.Vec3(tableWidth / 2, tableThickness / 2, tableHeight / 2));
+            const tableBody = new CANNON.Body({ mass: 0, material: tableMaterial }); // Masa 0 = estático
+            tableBody.addShape(tableShape);
+            // Calcular posición mundial correcta para el cuerpo físico
+            const tableBodyWorldPos = tableGroup.localToWorld(tableSurfaceMesh.position.clone());
+            tableBody.position.copy(tableBodyWorldPos);
+            // Copiar rotación del grupo (aunque no debería rotar)
+            tableBody.quaternion.copy(tableGroup.quaternion);
+            world.addBody(tableBody);
+            tableParts.push({ mesh: tableSurfaceMesh, body: tableBody, type: 'table' }); // Guardar referencia si es necesario
+            console.log("Cuerpo físico de la superficie de la mesa creado y añadido.");
+
+            // Cushions and Frame (Visuals + Physics)
+            createCushionsAndFrame(); // Usar función que ahora incluye física
+
+            // --- Create Balls - NO AÚN ---
+            // createBalls();
 
             // --- Setup Controllers (Keep) ---
-            setupControllers(); // Configura los mandos
+            setupControllers();
+
+            // --- Setup Sound - NO AÚN ---
+            // setupSound();
 
             // --- Event Listeners ---
             window.addEventListener('resize', onWindowResize, false);
 
             // --- Start Animation Loop ---
             renderer.setAnimationLoop(animate);
-            console.log("Inicialización simplificada completa (Paso 3 - Mesa Suelo).");
+            console.log("Inicialización con física de mesa completa.");
         }
 
-        // Creates only visual meshes for cushions/frame
-        function createCushionsAndFrameVisualsOnly() {
-            const cushionYPos = cushionHeight / 2; // Sigue siendo relativo a la superficie (Y=0 del grupo)
+        // Renombrada y modificada para incluir física
+        function createCushionsAndFrame() {
+            const cushionYPos = cushionHeight / 2;
             const woodMaterial = new THREE.MeshStandardMaterial({ color: 0x8B4513, roughness: 0.7 });
 
             const cushionGeometryLong = new THREE.BoxGeometry(tableWidth + 2 * cushionWidth, cushionHeight, cushionWidth);
@@ -130,44 +184,51 @@
             ];
 
             cushionPositions.forEach(posData => {
+                // Visual Mesh
                 const cushionMesh = new THREE.Mesh(posData.geometry, woodMaterial);
                 cushionMesh.position.set(posData.x, posData.y, posData.z);
                 tableGroup.add(cushionMesh);
+
+                // Physics Body Creation - REINTRODUCIDO
+                const cannonVec = new CANNON.Vec3(posData.geometry.parameters.width / 2, posData.geometry.parameters.height / 2, posData.geometry.parameters.depth / 2);
+                const cushionShape = new CANNON.Box(cannonVec);
+                const cushionBody = new CANNON.Body({ mass: 0, material: cushionMaterial }); // Estático
+                cushionBody.addShape(cushionShape);
+                // Calcular posición mundial correcta
+                const worldPos = tableGroup.localToWorld(cushionMesh.position.clone());
+                cushionBody.position.copy(worldPos);
+                cushionBody.quaternion.copy(tableGroup.quaternion); // Copiar rotación del grupo
+                world.addBody(cushionBody);
+                tableParts.push({ mesh: cushionMesh, body: cushionBody, type: 'cushion' });
             });
 
+            // Base visual (sin física necesaria)
             const baseHeight = 0.15;
             const baseMesh = new THREE.Mesh(
                 new THREE.BoxGeometry(tableWidth + 2 * cushionWidth + 0.1, baseHeight, tableHeight + 2 * cushionWidth + 0.1),
                 woodMaterial
             );
-             // Base ahora estará bajo el nivel del suelo (Y=0 del grupo)
             baseMesh.position.y = -tableThickness - baseHeight / 2;
             tableGroup.add(baseMesh);
-             console.log("Visuales de cojines y marco creados.");
+            console.log("Cuerpos físicos de cojines creados y añadidos.");
         }
 
-        // Setup Controllers (Assign cue to controller 2)
+        // Setup Controllers (No changes needed here)
         function setupControllers() {
-            // Controller 1 (Left Hand - Basic line visual)
             controller1 = renderer.xr.getController(0);
             scene.add(controller1);
-            console.log("Mando 1 (Izquierda) configurado.");
-
+           // console.log("Mando 1 (Izquierda) configurado.");
             const lineMaterial = new THREE.LineBasicMaterial({ color: 0xcccccc });
-            const lineGeometry = new THREE.BufferGeometry().setFromPoints([
-                new THREE.Vector3(0, 0, 0), new THREE.Vector3(0, 0, -0.2)
-            ]);
+            const lineGeometry = new THREE.BufferGeometry().setFromPoints([ new THREE.Vector3(0, 0, 0), new THREE.Vector3(0, 0, -0.2) ]);
             const line1 = new THREE.Line(lineGeometry, lineMaterial);
             controller1.add(line1);
 
-            // Controller 2 (Right Hand - Cue Stick)
             controller2 = renderer.xr.getController(1);
             controller2.addEventListener('selectstart', onSelectStart);
             controller2.addEventListener('selectend', onSelectEnd);
             scene.add(controller2);
             cueController = controller2;
-            console.log("Mando 2 (Derecha - Cue) configurado.");
-
+           // console.log("Mando 2 (Derecha - Cue) configurado.");
             const cueLength = 1.2;
             const cueRadius = 0.01;
             const cueGeometry = new THREE.CylinderGeometry(cueRadius, cueRadius * 0.8, cueLength, 16);
@@ -179,46 +240,27 @@
         }
 
 
-        // --- WebXR Event Handlers (Check cueController) ---
-        function onSelectStart(event) {
-            const controller = event.target;
-            console.log("Evento: selectstart detectado");
-            if (controller === cueController) {
-                isTriggerDown = true;
-                console.log("Cue controller trigger pressed (interaction disabled).");
-            } else {
-                 console.log("SelectStart en mando NO asignado como taco.");
-            }
-        }
+        // --- WebXR Event Handlers (No changes needed here) ---
+        function onSelectStart(event) { /* ... */ }
+        function onSelectEnd(event) { /* ... */ }
 
-        function onSelectEnd(event) {
-            const controller = event.target;
-            console.log("Evento: selectend detectado");
-            if (controller === cueController && isTriggerDown) {
-                isTriggerDown = false;
-                console.log("Cue controller trigger released (interaction disabled).");
-                // shootBall(); // Disabled for now
-            } else if (controller === cueController && !isTriggerDown) {
-                 console.log("SelectEnd en mando de taco, pero trigger no estaba pulsado.");
-            } else {
-                 console.log("SelectEnd en mando NO asignado como taco.");
-            }
-        }
-
-        // --- Billiards Logic Functions (Disabled/Removed) ---
-        function shootBall() {
-             console.log("shootBall() called, but interaction is disabled.");
-        }
+        // --- Billiards Logic Functions (Still disabled) ---
+        function shootBall() { /* ... */ }
 
         // --- Window Resize Handler ---
-        function onWindowResize() {
-            camera.aspect = window.innerWidth / window.innerHeight;
-            camera.updateProjectionMatrix();
-            renderer.setSize(window.innerWidth, window.innerHeight);
-        }
+        function onWindowResize() { /* ... */ }
 
-        // --- Animation Loop (Simplified) ---
+        // --- Animation Loop ---
         function animate() {
+            // Update Physics World - REINTRODUCIDO
+            if (world) {
+                world.step(timeStep);
+            }
+
+            // Sync visuals with physics - NO AÚN (no hay objetos dinámicos)
+
+            // Check game state - NO AÚN
+
             // Render Scene
             renderer.render(scene, camera);
         }
@@ -226,5 +268,6 @@
     </script>
 </body>
 </html>
+
 
 
