@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
     <meta charset="utf-8">
-    <title>WebXR Billar Passthrough (Paso 41 - Test Sin Mandos)</title> <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>WebXR Billar Passthrough (Paso 42 - Test Render Tapete)</title> <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
     <style>
         body { margin: 0; overflow: hidden; font-family: monospace; background-color: #000; }
         canvas { display: block; }
@@ -33,32 +33,31 @@
         let camera, scene, renderer;
         let tableGroup; // Contenedor
 
-        // Física (Mínima + Material Cojín)
+        // Física (Mínima)
         let world;
         const timeStep = 1 / 60;
         const tableParts = [];
-        let tableMaterial, cushionMaterial;
+        let tableMaterial; // Solo material de tabla
 
-        // WebXR Controller Variables - Declaradas pero no usadas en setup
+        // WebXR Controller Variables - Declaradas pero no usadas
         let controller1, controller2;
         let cueController = null;
         let cueStickMesh;
         let isTriggerDown = false;
 
         // Constants
-        const ballRadius = 0.03075;
         const tableWidth = 1.42;
         const tableHeight = 2.84;
         const tableThickness = 0.01;
-        const cushionHeight = 0.05;
-        const cushionWidth = 0.05;
+        // const cushionHeight = 0.05; // No necesario ahora
+        // const cushionWidth = 0.05; // No necesario ahora
         const tableSurfaceY = -0.4;
 
         init();
 
         // --- Initialization ---
         function init() {
-            console.log("Iniciando escena WebXR Billar (Paso 41)...");
+            console.log("Iniciando escena WebXR Billar (Paso 42)...");
 
             scene = new THREE.Scene();
             camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 100);
@@ -69,7 +68,7 @@
             renderer.setPixelRatio(window.devicePixelRatio);
             renderer.setClearAlpha(0);
             renderer.xr.enabled = true;
-            renderer.shadowMap.enabled = true;
+            renderer.shadowMap.enabled = true; // Dejar sombras por si acaso
             document.body.appendChild(renderer.domElement);
 
             const arButton = ARButton.createButton(renderer);
@@ -91,55 +90,82 @@
             world.broadphase = new CANNON.SAPBroadphase(world);
             console.log("Mundo físico Cannon.js creado.");
 
-            // Materiales estáticos necesarios
+            // Material físico de tabla
             tableMaterial = new CANNON.Material('table');
-            cushionMaterial = new CANNON.Material('cushion');
-            console.log("Materiales físicos (estáticos) creados.");
+            console.log("Material físico de tabla creado.");
 
-            // --- Crear Grupo y Visuales de la Mesa ---
+            // --- Crear Grupo de la Mesa ---
             tableGroup = new THREE.Group();
             tableGroup.position.set(0, tableSurfaceY, -1.5);
             scene.add(tableGroup);
             console.log("Table group creado en Y:", tableSurfaceY);
 
-            // --- Crear Superficie (Visual + Física AÑADIDA) ---
-            createTableSurface(); // Añade tableBody a world
+            // --- Crear SOLO Superficie (Visual + Física AÑADIDA) ---
+            createTableSurface(); // Llama a la función modificada
 
-            // --- Crear Cojines y Marco (Visual + Física CREADA pero NO AÑADIDA) ---
-            createCushionsAndFrame(); // Crea cushionBody pero NO lo añade a world
-
-            // --- Crear SOLO UNA BOLA VISUAL (Sin física) ---
-            createSingleBallVisualOnly(tableGroup);
-
-            // --- Configurar Mandos (Visual) ---
-            // ***** CAMBIO: Llamada a setupControllers comentada *****
+            // --- OTRAS FUNCIONES DE CREACIÓN COMENTADAS ---
+            // createCushionsAndFrame();
+            // createSingleBallVisualOnly(tableGroup);
             // setupControllers();
-            console.log("Llamada a setupControllers() DESACTIVADA para test.");
+            console.log("Llamadas a createCushions/createBall/setupControllers DESACTIVADAS.");
 
             // --- Event Listeners ---
             window.addEventListener('resize', onWindowResize, false);
 
             // --- Start Animation Loop ---
             renderer.setAnimationLoop(animate); // animate simplificado
-            console.log("Inicialización completa (Paso 41).");
+            console.log("Inicialización completa (Paso 42).");
         }
 
         // --- Función para crear superficie (Visual + Física AÑADIDA a World) ---
-        function createTableSurface() { /* ... (definición completa como antes) ... */ }
-        // --- Función para crear cojines y marco (Visual + Física CREADA pero NO AÑADIDA) ---
-        function createCushionsAndFrame() { /* ... (definición completa como antes) ... */ }
-        // --- Función para crear solo una bola visual (Sin física) ---
-        function createSingleBallVisualOnly(group) { /* ... (definición completa como antes) ... */ }
-        // --- Setup Controllers (Definida pero NO LLAMADA) ---
-        function setupControllers() { /* ... (definición completa como antes) ... */ }
+        function createTableSurface() {
+             console.log("Creando superficie (Visual + Física)...");
+             let tableSurfaceMesh; // Declarar fuera del try
+             try {
+                 // Visual
+                 const tableGeometry = new THREE.BoxGeometry(tableWidth, tableThickness, tableHeight);
+                 const tableMeshMaterial = new THREE.MeshStandardMaterial({ color: 0x006400, roughness: 0.9 });
+                 tableSurfaceMesh = new THREE.Mesh(tableGeometry, tableMeshMaterial); // Asignar aquí
+                 tableSurfaceMesh.name = "TableSurface";
+                 tableSurfaceMesh.position.y = -tableThickness / 2; // Local
+                 tableSurfaceMesh.receiveShadow = true;
+                 tableGroup.add(tableSurfaceMesh);
+                 console.log(" > Malla de tapete añadida.");
+             } catch(e) {
+                 console.error("Error creando malla de tapete:", e);
+                 return; // Salir si falla la malla
+             }
+
+             let tableBody; // Declarar fuera del try
+             try {
+                 // Física Estática
+                 const tableShape = new CANNON.Box(new CANNON.Vec3(tableWidth / 2, tableThickness / 2, tableHeight / 2));
+                 tableBody = new CANNON.Body({ mass: 0, material: tableMaterial }); // Estático
+                 tableBody.addShape(tableShape);
+                 const tableBodyWorldPos = tableGroup.localToWorld(tableSurfaceMesh.position.clone()); // Calcular pos mundial
+                 tableBody.position.copy(tableBodyWorldPos);
+                 tableBody.quaternion.copy(tableGroup.quaternion);
+                 world.addBody(tableBody); // Añadir a world
+                 console.log(" > Cuerpo físico de superficie AÑADIDO a world.");
+                 tableParts.push({ mesh: tableSurfaceMesh, body: tableBody, type: 'table' });
+             } catch(e) {
+                 console.error("Error creando/añadiendo cuerpo físico de superficie:", e);
+                 // No necesariamente salir, la malla podría seguir visible
+             }
+         }
 
 
-        // --- WebXR Event Handlers (No se añadirán si setupControllers no se llama) ---
+        // --- Otras funciones definidas pero NO LLAMADAS ---
+        function createCushionsAndFrame() { console.log("createCushionsAndFrame NO LLAMADA"); }
+        function createSingleBallVisualOnly(group) { console.log("createSingleBallVisualOnly NO LLAMADA"); }
+        function setupControllers() { console.log("setupControllers NO LLAMADA"); }
         function onSelectStart(event) { /* ... */ }
         function onSelectEnd(event) { /* ... */ }
-
-        // --- Window Resize Handler ---
-        function onWindowResize() { /* ... */ }
+        function onWindowResize() {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        }
 
         // --- Animation Loop (SIMPLIFICADO) ---
         function animate() {
@@ -149,7 +175,6 @@
                 try { world.step(timeStep); } catch (e) { console.error("Error during world.step():", e); }
             }
             */
-            // NO hay sincronización de física necesaria
             // Render Scene - ÚNICA ACCIÓN ACTIVA
             try {
                  renderer.render(scene, camera);
@@ -158,15 +183,10 @@
             }
         }
 
-        // --- Copiar aquí las definiciones completas de las funciones auxiliares ---
-        // (createTableSurface, createCushionsAndFrame, createSingleBallVisualOnly,
-        //  setupControllers, onSelectStart, onSelectEnd, onWindowResize)
-        // Asegúrate de que las definiciones completas de las funciones estén presentes.
-
-
     </script>
 </body>
 </html>
+
 
 
 
