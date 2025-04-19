@@ -3,11 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>WebXR con Modelo 3D (FBX) - Debug Inicio Sesión XR</title> <script src="https://cdn.tailwindcss.com"></script>
+    <title>WebXR con Modelo 3D (FBX) - Debug Error Update</title> <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/libs/fflate.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/FBXLoader.js"></script>
-
     <style>
         /* ... (Estilos CSS idénticos) ... */
          body { margin: 0; overflow: hidden; font-family: 'Inter', sans-serif; }
@@ -62,13 +59,15 @@
         let scene, camera, renderer;
         let xrSession = null;
         let xrRefSpace = null;
-        let loadedModel = null; // Modelo no se cargará en esta versión de debug
-        let modelBoxHelper = null;
+        // Modelo y helpers no se usarán en esta versión
+        // let loadedModel = null;
+        // let modelBoxHelper = null;
 
         // Variables para Interacción con Mandos
-        let controller1;
-        let raycaster;
-        let intersectedObject = null;
+        let controller1; // Mando derecho
+        // Raycaster y intersectedObject no se usan ahora
+        // let raycaster;
+        // let intersectedObject = null;
 
         const xrButton = document.getElementById('xr-button');
         const messageDiv = document.getElementById('message');
@@ -76,7 +75,7 @@
         // --- Función para mostrar mensajes ---
         function showMessage(msg, isError = false) {
              // ... (código idéntico) ...
-              if (messageDiv) {
+             if (messageDiv) {
                 messageDiv.textContent = msg;
                 messageDiv.style.color = isError ? '#FFCCCC' : 'white';
                 messageDiv.style.backgroundColor = isError ? 'rgba(150, 0, 0, 0.8)' : 'rgba(0, 0, 0, 0.7)';
@@ -121,15 +120,13 @@
                 directionalLight.position.set(1, 2, 1).normalize();
                 scene.add(directionalLight);
 
-                setupControllers();
+                // Configurar solo el objeto base del mando
+                setupControllersMinimal();
 
-                // --- Carga del Modelo Comentada para Debug ---
-                // loadFBXModel();
+                // Carga de modelo comentada
                 console.log("Carga de modelo FBX OMITIDA para depuración.");
                 showMessage("Modelo omitido (debug). Escena lista.", false);
-                // Llamar a checkXRSupport directamente ya que loadFBXModel no lo hará
                 checkXRSupport();
-                // --------------------------------------------
 
                 renderer.setAnimationLoop(renderLoop);
                 console.log("Bucle de animación iniciado.");
@@ -146,99 +143,46 @@
             }
         }
 
-        // --- Configuración de Mandos y Raycaster ---
-        function setupControllers() {
-            // ... (código idéntico) ...
+        // --- Configuración de Mandos Mínima ---
+        function setupControllersMinimal() {
+            // Mando Derecho (índice 1)
             controller1 = renderer.xr.getController(1);
-            scene.add(controller1);
+            scene.add(controller1); // Añadir solo el objeto base del mando
 
-            controller1.addEventListener('selectstart', onSelectStart);
-            controller1.addEventListener('selectend', onSelectEnd);
+            // --- Listeners y visualización comentados ---
+            // controller1.addEventListener('selectstart', onSelectStart);
+            // controller1.addEventListener('selectend', onSelectEnd);
+            // const controllerMaterial = new THREE.LineBasicMaterial(...);
+            // const controllerGeometry = new THREE.BufferGeometry()...;
+            // const controllerLine = new THREE.Line(...);
+            // controller1.add(controllerLine);
+            // raycaster = new THREE.Raycaster();
+            // -------------------------------------------
 
-            const controllerMaterial = new THREE.LineBasicMaterial({ color: 0xffffff, linewidth: 2 });
-            const controllerGeometry = new THREE.BufferGeometry().setFromPoints([
-                new THREE.Vector3(0, 0, 0),
-                new THREE.Vector3(0, 0, -1)
-            ]);
-            const controllerLine = new THREE.Line(controllerGeometry, controllerMaterial);
-            controllerLine.scale.z = 0.5;
-            controller1.add(controllerLine);
-
-            raycaster = new THREE.Raycaster();
-            console.log("Mandos configurados.");
+            console.log("Mandos configurados (mínimo).");
         }
 
-        // --- Función para Cargar el Modelo FBX (No se llama en esta versión) ---
-        function loadFBXModel() {
-              if (typeof THREE.FBXLoader === 'undefined') {
-                 console.error("THREE.FBXLoader no está definido.");
-                 showMessage("Error: Falta FBXLoader.", true);
-                 return;
-            }
-            // ... (resto del código de carga, pero no se ejecutará) ...
-        }
+        // --- Función para Cargar el Modelo FBX (No se llama) ---
+        // function loadFBXModel() { ... }
 
-        // --- Manejadores de Eventos de Selección del Mando ---
-        function onSelectStart(event) {
-             console.log("SelectStart detectado");
-            const controller = event.target;
-
-            // No hacer nada si el modelo no está cargado (en esta versión, nunca lo estará)
-            if (!loadedModel) {
-                 console.log("Modelo no cargado, no se puede agarrar.");
-                 return;
-            }
-
-            // --- Código de Raycasting y Attach comentado ---
-            /*
-            const tempMatrix = new THREE.Matrix4();
-            tempMatrix.identity().extractRotation(controller.matrixWorld);
-            raycaster.ray.origin.setFromMatrixPosition(controller.matrixWorld);
-            raycaster.ray.direction.set(0, 0, -1).applyMatrix4(tempMatrix);
-            const intersects = raycaster.intersectObject(loadedModel, true);
-            if (intersects.length > 0) {
-                intersectedObject = loadedModel;
-                controller.attach(intersectedObject);
-                if (modelBoxHelper) modelBoxHelper.visible = false;
-            } else {
-                console.log("No se encontró intersección con el modelo.");
-            }
-            */
-        }
-
-        function onSelectEnd(event) {
-             console.log("SelectEnd detectado");
-             // --- Código de Detach comentado ---
-            /*
-            if (intersectedObject) {
-                scene.attach(intersectedObject);
-                intersectedObject = null;
-                if (modelBoxHelper) modelBoxHelper.visible = true;
-            }
-            */
-        }
+        // --- Manejadores de Eventos de Selección del Mando (No se usan) ---
+        // function onSelectStart(event) { ... }
+        // function onSelectEnd(event) { ... }
 
 
         // --- Bucle de Renderizado ---
         function renderLoop(timestamp, frame) {
-            // Actualizar BoxHelper comentado ya que no hay modelo
-            /*
-            if (modelBoxHelper && modelBoxHelper.visible) {
-                modelBoxHelper.update();
-            }
-            */
+            // No hay nada que actualizar explícitamente aquí en esta versión
             if (renderer && scene && camera) {
                  renderer.render(scene, camera);
             }
         }
 
         // --- Funciones WebXR ---
-
         async function checkXRSupport() {
-            // ... (código idéntico) ...
+             // ... (código idéntico) ...
               console.log("--- Iniciando checkXRSupport ---");
             const currentMsg = messageDiv.textContent;
-            // Ajustar condición para mostrar mensaje
             const showCheckMsg = !currentMsg.includes('Error') && !currentMsg.includes('Modelo omitido');
 
             if (showCheckMsg) {
@@ -259,7 +203,6 @@
                             showMessage("WebXR 'immersive-ar' compatible. ¡Listo!", false);
                          }
                     } else {
-                         // Mostrar siempre este error si ocurre
                          showMessage("El modo 'immersive-ar' no es compatible.", true);
                          xrButton.disabled = true;
                          xrButton.textContent = "Modo AR no soportado";
@@ -280,32 +223,29 @@
         }
 
         async function startXRSession() {
-            console.log("--- Iniciando startXRSession ---"); // Log inicio
+            // ... (código idéntico con logs de Paso 1, 2, 3) ...
+             console.log("--- Iniciando startXRSession ---");
             showMessage("Iniciando sesión XR...", false);
             xrButton.disabled = true;
             xrButton.textContent = "Iniciando...";
 
             if (!xrSession) {
                 try {
-                    // Paso 1: Solicitar sesión
                     console.log("Paso 1: Solicitando navigator.xr.requestSession('immersive-ar')...");
                     xrSession = await navigator.xr.requestSession('immersive-ar', {
                          requiredFeatures: ['local-floor']
                     });
                     console.log("Paso 1: ¡Sesión XR obtenida!", xrSession);
 
-                    // Paso 2: Configurar capa WebGL
                     console.log("Paso 2: Configurando renderer.xr.setSession...");
                     await renderer.xr.setSession(xrSession);
                     console.log("Paso 2: ¡Sesión asignada al renderer XR!");
 
-                    // Paso 3: Solicitar espacio de referencia
                     console.log("Paso 3: Solicitando xrSession.requestReferenceSpace('local-floor')...");
                     xrRefSpace = await xrSession.requestReferenceSpace('local-floor');
                     console.log("Paso 3: ¡Espacio de referencia 'local-floor' obtenido!");
 
 
-                    // Configuración final si todo va bien
                     xrButton.textContent = 'Salir de Realidad Mixta';
                     xrButton.onclick = endXRSession;
                     xrButton.disabled = false;
@@ -315,17 +255,15 @@
                     xrSession.addEventListener('end', onSessionEnded);
 
                 } catch (error) {
-                    console.error("--- ERROR durante startXRSession ---:", error); // Log de error
+                    console.error("--- ERROR durante startXRSession ---:", error);
                     showMessage(`Error al iniciar la sesión: ${error.message}`, true);
-                    // Limpiar estado si falla
                     if (xrSession) {
-                        // Intentar terminarla si se llegó a crear pero falló después
                         try { await xrSession.end(); } catch (e) { console.error("Error al intentar terminar sesión fallida:", e); }
                         xrSession = null;
                     }
-                    xrButton.textContent = 'Iniciar Realidad Mixta'; // Restaurar botón
+                    xrButton.textContent = 'Iniciar Realidad Mixta';
                     xrButton.onclick = startXRSession;
-                    checkXRSupport(); // Re-verificar y habilitar si es posible
+                    checkXRSupport();
                 }
             } else {
                  console.warn("Se intentó llamar a startXRSession cuando ya existía una sesión.");
@@ -334,7 +272,7 @@
 
         function onSessionEnded() {
              // ... (código idéntico) ...
-             console.log("Evento 'sessionended' recibido.");
+              console.log("Evento 'sessionended' recibido.");
             if (xrSession) {
                 xrSession.removeEventListener('end', onSessionEnded);
                 xrSession = null;
@@ -354,22 +292,21 @@
 
         async function endXRSession() {
              // ... (código idéntico) ...
-              console.log("Intentando terminar la sesión XR manualmente...");
+               console.log("Intentando terminar la sesión XR manualmente...");
              xrButton.disabled = true;
              xrButton.textContent = "Saliendo...";
             if (xrSession) {
                 try {
                     await xrSession.end();
                     console.log("Llamada a xrSession.end() completada.");
-                    // onSessionEnded se encargará del resto
                 } catch (error) {
                     console.error("Error al terminar la sesión WebXR:", error);
                     showMessage(`Error al salir de la sesión: ${error.message}`, true);
-                    onSessionEnded(); // Forzar limpieza
+                    onSessionEnded();
                 }
             } else {
                  console.warn("Se intentó llamar a endXRSession sin una sesión activa.");
-                 onSessionEnded(); // Restaurar estado
+                 onSessionEnded();
             }
         }
 
@@ -403,16 +340,5 @@
     </script>
 </body>
 </html>
-
-
-
-
-
-
-
-
-
-
-
 
 
