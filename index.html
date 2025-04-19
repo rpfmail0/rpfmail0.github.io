@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>WebXR con Modelo 3D (FBX) - Debug Material y Escala</title>
+    <title>WebXR con Modelo 3D (FBX) - Restaurar Materiales</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/libs/fflate.min.js"></script>
@@ -111,9 +111,8 @@
                 document.body.appendChild(renderer.domElement);
                 console.log("Renderer añadido al DOM.");
 
-                const ambientLight = new THREE.AmbientLight(0xffffff, 0.8); // Ligeramente más luz ambiental
+                const ambientLight = new THREE.AmbientLight(0xffffff, 0.8);
                 scene.add(ambientLight);
-                // Luz direccional no es necesaria si usamos MeshBasicMaterial, pero la dejamos por si acaso
                 const directionalLight = new THREE.DirectionalLight(0xffffff, 0.5);
                 directionalLight.position.set(1, 2, 1).normalize();
                 scene.add(directionalLight);
@@ -145,7 +144,7 @@
             }
 
             const loader = new THREE.FBXLoader();
-            const modelUrl = 'planta_interior_2.fbx';
+            const modelUrl = 'planta_interior_2.fbx'; // <-- Nombre del archivo FBX
 
             console.log(`Intentando cargar modelo FBX desde: ${modelUrl}`);
             showMessage(`Cargando modelo FBX: ${modelUrl}...`, false);
@@ -156,16 +155,14 @@
                     console.log("Modelo FBX cargado correctamente:", object);
                     loadedModel = object;
 
-                    // --- Ajustes del modelo (¡IMPORTANTE!) ---
-                    // Escala aún más pequeña basada en tu feedback. ¡AJUSTA SI ES NECESARIO!
-                    loadedModel.scale.set(0.001, 0.001, 0.001); // <-- Escala MUY pequeña (era 0.005)
-                                                                // Prueba 0.002, 0.005, 0.01 si no se ve o es muy pequeño
-
-                    loadedModel.position.set(0, 1.0, -1.5); // Posición Y=1.0, Z=-1.5
+                    // --- Ajustes del modelo ---
+                    // Usar la escala que funcionó para hacerlo visible
+                    loadedModel.scale.set(0.001, 0.001, 0.001);
+                    loadedModel.position.set(0, 1.0, -1.5);
                     // loadedModel.rotation.x = -Math.PI / 2;
 
-                    // --- Reemplazar Materiales (SOLO PARA DEBUG) ---
-                    // Se cambia todo a un material rojo básico para ver si el problema es de visibilidad/material
+                    // --- Material de Depuración Comentado ---
+                    /* // DESCOMENTA ESTO SI EL MODELO VUELVE A SER INVISIBLE
                     const overrideMaterial = new THREE.MeshBasicMaterial({
                         color: 0xff0000, // Rojo brillante
                         side: THREE.DoubleSide // Renderizar por ambos lados
@@ -173,30 +170,40 @@
                     loadedModel.traverse(function (child) {
                         if (child.isMesh) {
                             child.material = overrideMaterial;
-                            // Las sombras no funcionarán con MeshBasicMaterial, pero lo dejamos por si volvemos a Standard
                             child.castShadow = true;
                             child.receiveShadow = true;
                         }
                     });
                     console.log("Materiales reemplazados por material básico rojo (DEBUG).");
+                    */
                     // ---------------------------------------------
+
+                    // Asegurarse de que las mallas proyecten/reciban sombras con sus materiales originales
+                     loadedModel.traverse(function (child) {
+                         if (child.isMesh) {
+                             child.castShadow = true;
+                             child.receiveShadow = true;
+                         }
+                     });
+
 
                     scene.add(loadedModel);
                     console.log("Modelo FBX añadido a la escena.");
 
                     // --- Añadir/Actualizar BoxHelper ---
+                    // Lo mantenemos por ahora, es útil
                     if (modelBoxHelper) scene.remove(modelBoxHelper);
                     modelBoxHelper = new THREE.BoxHelper( loadedModel, 0xffff00 ); // Caja amarilla
                     scene.add( modelBoxHelper );
                     console.log("BoxHelper añadido/actualizado para el modelo.");
                     // ----------------------------------------
 
-                    showMessage("Modelo FBX cargado (con material debug). Escena lista.", false);
+                    showMessage("Modelo FBX cargado. Escena lista.", false);
                     checkXRSupport();
                 },
                 function (xhr) {
                     // ... (código idéntico) ...
-                     const percentLoaded = (xhr.loaded / xhr.total * 100).toFixed(0);
+                    const percentLoaded = (xhr.loaded / xhr.total * 100).toFixed(0);
                     console.log(`Modelo FBX ${percentLoaded}% cargado`);
                     if (percentLoaded < 100) {
                         showMessage(`Cargando modelo FBX: ${percentLoaded}%`, false);
@@ -233,7 +240,7 @@
         // --- Funciones WebXR (checkXRSupport, startXRSession, onSessionEnded, endXRSession) ---
         // (Sin cambios)
         async function checkXRSupport() { /* ... código idéntico ... */
-            console.log("--- Iniciando checkXRSupport ---");
+             console.log("--- Iniciando checkXRSupport ---");
             const currentMsg = messageDiv.textContent;
             const showCheckMsg = !currentMsg.includes('Error') && !currentMsg.includes('cargado');
 
@@ -274,9 +281,9 @@
                 xrButton.textContent = "WebXR no soportado";
             }
              console.log("--- Finalizando checkXRSupport ---");
-         }
+        }
         async function startXRSession() { /* ... código idéntico ... */
-             console.log("Intentando iniciar sesión XR...");
+              console.log("Intentando iniciar sesión XR...");
             showMessage("Iniciando sesión XR...", false);
             xrButton.disabled = true;
             xrButton.textContent = "Iniciando...";
@@ -318,7 +325,7 @@
             }
         }
         function onSessionEnded() { /* ... código idéntico ... */
-              console.log("Evento 'sessionended' recibido.");
+               console.log("Evento 'sessionended' recibido.");
             if (xrSession) {
                 xrSession.removeEventListener('end', onSessionEnded);
                 xrSession = null;
@@ -334,9 +341,9 @@
                 camera.position.set(0, 1.6, 5.0); // Restaurar posición Z de cámara alejada
                 camera.lookAt(0, 1, 0);
              }
-         }
+        }
         async function endXRSession() { /* ... código idéntico ... */
-              console.log("Intentando terminar la sesión XR manualmente...");
+               console.log("Intentando terminar la sesión XR manualmente...");
              xrButton.disabled = true;
              xrButton.textContent = "Saliendo...";
             if (xrSession) {
@@ -358,7 +365,7 @@
         // --- Inicio de la Aplicación ---
         document.addEventListener('DOMContentLoaded', () => {
             // ... (código idéntico) ...
-               console.log("Evento DOMContentLoaded recibido.");
+                console.log("Evento DOMContentLoaded recibido.");
             showMessage("DOM cargado. Inicializando Three.js...", false);
 
              if (typeof THREE === 'undefined') {
@@ -384,6 +391,7 @@
     </script>
 </body>
 </html>
+
 
 
 
