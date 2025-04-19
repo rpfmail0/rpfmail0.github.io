@@ -3,7 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>WebXR con Modelo 3D (FBX) e Interacción</title> <script src="https://cdn.tailwindcss.com"></script>
+    <title>WebXR con Modelo 3D (FBX) e Interacción</title>
+    <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/libs/fflate.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/FBXLoader.js"></script>
@@ -95,7 +96,8 @@
 
         // --- Inicializar Three.js y Configuración XR ---
         function initThree() {
-             try {
+             // ... (código idéntico) ...
+              try {
                 console.log("Iniciando Three.js...");
                 showMessage("Iniciando Three.js...", false);
                 scene = new THREE.Scene();
@@ -120,13 +122,9 @@
                 directionalLight.position.set(1, 2, 1).normalize();
                 scene.add(directionalLight);
 
-                // --- Configurar Mandos ---
                 setupControllers();
+                loadFBXModel();
 
-                // --- Cargar Modelo ---
-                loadFBXModel(); // Esta función ahora también llama a checkXRSupport al terminar
-
-                // Iniciar bucle de renderizado
                 renderer.setAnimationLoop(renderLoop);
                 console.log("Bucle de animación iniciado.");
                 return true;
@@ -144,25 +142,23 @@
 
         // --- Configuración de Mandos y Raycaster ---
         function setupControllers() {
-            // Mando Derecho (índice 1)
+            // ... (código idéntico) ...
+             // Mando Derecho (índice 1)
             controller1 = renderer.xr.getController(1);
             scene.add(controller1); // Añadir el mando a la escena para que se actualice su posición
 
-            // Añadir listeners para eventos de selección (agarrar/soltar)
             controller1.addEventListener('selectstart', onSelectStart);
             controller1.addEventListener('selectend', onSelectEnd);
 
-            // (Opcional) Añadir una línea visual al mando para saber hacia dónde apunta
-            const controllerMaterial = new THREE.LineBasicMaterial({ color: 0xffffff, linewidth: 2 }); // Línea blanca
+            const controllerMaterial = new THREE.LineBasicMaterial({ color: 0xffffff, linewidth: 2 });
             const controllerGeometry = new THREE.BufferGeometry().setFromPoints([
-                new THREE.Vector3(0, 0, 0), // Origen del mando
-                new THREE.Vector3(0, 0, -1) // Línea apuntando hacia adelante (1 metro)
+                new THREE.Vector3(0, 0, 0),
+                new THREE.Vector3(0, 0, -1)
             ]);
             const controllerLine = new THREE.Line(controllerGeometry, controllerMaterial);
-            controllerLine.scale.z = 0.5; // Hacer la línea más corta (0.5 metros)
-            controller1.add(controllerLine); // Añadir la línea como hija del mando
+            controllerLine.scale.z = 0.5;
+            controller1.add(controllerLine);
 
-            // Crear el Raycaster
             raycaster = new THREE.Raycaster();
 
             console.log("Mandos configurados.");
@@ -170,7 +166,8 @@
 
         // --- Función para Cargar el Modelo FBX ---
         function loadFBXModel() {
-              if (typeof THREE.FBXLoader === 'undefined') {
+              // ... (código idéntico) ...
+               if (typeof THREE.FBXLoader === 'undefined') {
                  console.error("THREE.FBXLoader no está definido.");
                  showMessage("Error: Falta FBXLoader.", true);
                  return;
@@ -191,8 +188,7 @@
                     loadedModel.scale.set(0.001, 0.001, 0.001);
                     loadedModel.position.set(0, 1.0, -1.5);
 
-                    // Comentado el override de material, usar materiales originales
-                    /*
+                    /* // Material Debug Comentado
                     const overrideMaterial = new THREE.MeshBasicMaterial({...});
                     loadedModel.traverse(...);
                     */
@@ -207,24 +203,23 @@
                     scene.add(loadedModel);
                     console.log("Modelo FBX añadido a la escena.");
 
-                    // Añadir BoxHelper (útil mantenerlo)
                     if (modelBoxHelper) scene.remove(modelBoxHelper);
                     modelBoxHelper = new THREE.BoxHelper( loadedModel, 0xffff00 );
                     scene.add( modelBoxHelper );
                     console.log("BoxHelper añadido/actualizado para el modelo.");
 
                     showMessage("Modelo FBX cargado. Escena lista.", false);
-                    checkXRSupport(); // Verificar WebXR después de cargar
+                    checkXRSupport();
                 },
                 function (xhr) { /* ... onProgress idéntico ... */
-                    const percentLoaded = (xhr.loaded / xhr.total * 100).toFixed(0);
+                     const percentLoaded = (xhr.loaded / xhr.total * 100).toFixed(0);
                     console.log(`Modelo FBX ${percentLoaded}% cargado`);
                     if (percentLoaded < 100) {
                         showMessage(`Cargando modelo FBX: ${percentLoaded}%`, false);
                     }
                  },
                 function (error) { /* ... onError idéntico ... */
-                     console.error("Error al cargar el modelo FBX:", error);
+                      console.error("Error al cargar el modelo FBX:", error);
                     let errorMsg = `Error al cargar modelo FBX: ${modelUrl}. `;
                     if (error.target && error.target.status === 0) {
                         errorMsg += 'Posible error de CORS o red.';
@@ -240,34 +235,26 @@
         }
 
         // --- Manejadores de Eventos de Selección del Mando ---
-
         function onSelectStart(event) {
-            console.log("SelectStart detectado");
-            const controller = event.target; // El mando que disparó el evento
+            // ... (código idéntico) ...
+             console.log("SelectStart detectado");
+            const controller = event.target;
 
-            if (!loadedModel) return; // No hacer nada si el modelo no ha cargado
+            if (!loadedModel) return;
 
-            // Crear una matriz temporal para la posición/orientación del mando
             const tempMatrix = new THREE.Matrix4();
-            tempMatrix.identity().extractRotation(controller.matrixWorld); // Obtener rotación del mando
+            tempMatrix.identity().extractRotation(controller.matrixWorld);
 
-            // Establecer origen y dirección del rayo desde el mando
-            raycaster.ray.origin.setFromMatrixPosition(controller.matrixWorld); // Origen en la posición del mando
-            raycaster.ray.direction.set(0, 0, -1).applyMatrix4(tempMatrix); // Dirección: hacia adelante (Z negativo) relativo al mando
+            raycaster.ray.origin.setFromMatrixPosition(controller.matrixWorld);
+            raycaster.ray.direction.set(0, 0, -1).applyMatrix4(tempMatrix);
 
-            // Comprobar intersecciones con el modelo cargado (y sus hijos)
-            const intersects = raycaster.intersectObject(loadedModel, true); // El 'true' es para recursividad
+            const intersects = raycaster.intersectObject(loadedModel, true);
 
             if (intersects.length > 0) {
                 console.log("Intersección encontrada con el modelo!");
-                intersectedObject = loadedModel; // Guardar referencia al objeto agarrado
-
-                // Adjuntar el modelo al mando
-                // Three.js se encarga de mantener la posición relativa inicial
+                intersectedObject = loadedModel;
                 controller.attach(intersectedObject);
                 console.log("Modelo adjuntado al mando.");
-
-                // (Opcional) Ocultar BoxHelper mientras se agarra
                 if (modelBoxHelper) modelBoxHelper.visible = false;
 
             } else {
@@ -276,31 +263,23 @@
         }
 
         function onSelectEnd(event) {
-            console.log("SelectEnd detectado");
+            // ... (código idéntico) ...
+             console.log("SelectEnd detectado");
             if (intersectedObject) {
                 console.log("Soltando el modelo...");
-                // Readjuntar el objeto a la escena principal
-                // scene.attach se encarga de mantener la transformación global
                 scene.attach(intersectedObject);
                 console.log("Modelo readjuntado a la escena.");
-
-                // Limpiar la referencia
                 intersectedObject = null;
-
-                // (Opcional) Volver a mostrar BoxHelper
                  if (modelBoxHelper) modelBoxHelper.visible = true;
             }
         }
 
-
         // --- Bucle de Renderizado ---
         function renderLoop(timestamp, frame) {
-            // Actualizar el BoxHelper si existe y es visible
-            if (modelBoxHelper && modelBoxHelper.visible) {
+            // ... (código idéntico) ...
+             if (modelBoxHelper && modelBoxHelper.visible) {
                 modelBoxHelper.update();
             }
-
-            // Renderizar la escena
             if (renderer && scene && camera) {
                  renderer.render(scene, camera);
             }
@@ -309,7 +288,7 @@
         // --- Funciones WebXR (checkXRSupport, startXRSession, onSessionEnded, endXRSession) ---
         // (Sin cambios)
         async function checkXRSupport() { /* ... código idéntico ... */
-             console.log("--- Iniciando checkXRSupport ---");
+              console.log("--- Iniciando checkXRSupport ---");
             const currentMsg = messageDiv.textContent;
             const showCheckMsg = !currentMsg.includes('Error') && !currentMsg.includes('cargado');
 
@@ -352,7 +331,7 @@
              console.log("--- Finalizando checkXRSupport ---");
         }
         async function startXRSession() { /* ... código idéntico ... */
-              console.log("Intentando iniciar sesión XR...");
+               console.log("Intentando iniciar sesión XR...");
             showMessage("Iniciando sesión XR...", false);
             xrButton.disabled = true;
             xrButton.textContent = "Iniciando...";
@@ -394,7 +373,7 @@
             }
         }
         function onSessionEnded() { /* ... código idéntico ... */
-               console.log("Evento 'sessionended' recibido.");
+                console.log("Evento 'sessionended' recibido.");
             if (xrSession) {
                 xrSession.removeEventListener('end', onSessionEnded);
                 xrSession = null;
@@ -410,9 +389,9 @@
                 camera.position.set(0, 1.6, 5.0); // Restaurar posición Z de cámara alejada
                 camera.lookAt(0, 1, 0);
              }
-        }
+         }
         async function endXRSession() { /* ... código idéntico ... */
-               console.log("Intentando terminar la sesión XR manualmente...");
+                console.log("Intentando terminar la sesión XR manualmente...");
              xrButton.disabled = true;
              xrButton.textContent = "Saliendo...";
             if (xrSession) {
@@ -434,7 +413,7 @@
         // --- Inicio de la Aplicación ---
         document.addEventListener('DOMContentLoaded', () => {
             // ... (código idéntico) ...
-                console.log("Evento DOMContentLoaded recibido.");
+                 console.log("Evento DOMContentLoaded recibido.");
             showMessage("DOM cargado. Inicializando Three.js...", false);
 
              if (typeof THREE === 'undefined') {
