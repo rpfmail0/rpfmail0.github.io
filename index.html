@@ -62,13 +62,14 @@
         let scene, camera, renderer;
         let xrSession = null;
         let xrRefSpace = null;
-        let loadedModel = null; // Para guardar referencia al modelo cargado
+        let loadedModel = null;
 
         const xrButton = document.getElementById('xr-button');
         const messageDiv = document.getElementById('message');
 
         // --- Función para mostrar mensajes ---
         function showMessage(msg, isError = false) {
+            // ... (código idéntico) ...
             if (messageDiv) {
                 messageDiv.textContent = msg;
                 messageDiv.style.color = isError ? '#FFCCCC' : 'white';
@@ -89,17 +90,16 @@
 
         // --- Inicializar Three.js ---
         function initThree() {
+            // ... (código idéntico) ...
             try {
                 console.log("Iniciando Three.js...");
                 showMessage("Iniciando Three.js...", false);
                 scene = new THREE.Scene();
 
-                // Cámara (posición inicial para vista previa)
                 camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
-                camera.position.set(0, 1.6, 1.0); // Ajustar un poco la Z para ver mejor modelos grandes
-                camera.lookAt(0, 1, 0); // Mirar ligeramente hacia arriba
+                camera.position.set(0, 1.6, 1.0);
+                camera.lookAt(0, 1, 0);
 
-                // Renderer
                 renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
                 renderer.setSize(window.innerWidth, window.innerHeight);
                 renderer.setPixelRatio(window.devicePixelRatio);
@@ -107,17 +107,14 @@
                 document.body.appendChild(renderer.domElement);
                 console.log("Renderer añadido al DOM.");
 
-                // Luces (importante para ver el modelo)
                 const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
                 scene.add(ambientLight);
                 const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
                 directionalLight.position.set(1, 2, 1).normalize();
                 scene.add(directionalLight);
 
-                // --- Carga del Modelo 3D (FBX) ---
-                loadFBXModel(); // Llamar a la función que carga el modelo FBX
+                loadFBXModel();
 
-                // Iniciar bucle de renderizado
                 renderer.setAnimationLoop(renderLoop);
                 console.log("Bucle de animación iniciado.");
                 return true;
@@ -135,97 +132,96 @@
 
         // --- Función para Cargar el Modelo FBX ---
         function loadFBXModel() {
-            // Verificar que FBXLoader se ha cargado
             if (typeof THREE.FBXLoader === 'undefined') {
-                 console.error("THREE.FBXLoader no está definido. Asegúrate de que el script se cargó correctamente.");
+                 console.error("THREE.FBXLoader no está definido.");
                  showMessage("Error: Falta FBXLoader.", true);
-                 // También verificar fflate si es necesario, aunque FBXLoader fallará primero si no está
-                 if (typeof fflate === 'undefined') {
-                     console.warn("fflate no está definido. Puede ser necesario para algunos FBX.");
-                 }
                  return;
             }
 
             const loader = new THREE.FBXLoader();
-            const modelUrl = 'https://github.com/rpfmail0/rpfmail0.github.io/blob/55ae5ea90775b06159f07b1ccd3fc5dd94b5679e/indoor%20plant_02_6.1_1%2B2.fbx'; // <-- ¡¡¡ REEMPLAZA ESTO CON LA URL DE TU MODELO FBX !!!
+
+            // --- ¡¡¡ IMPORTANTE: URL DEL MODELO !!! ---
+            // El modelo FBX DEBE estar alojado en el MISMO DOMINIO que esta página HTML
+            // (p.ej., en el mismo repositorio de GitHub Pages) para evitar errores CORS.
+            // O en un servidor que configure correctamente las cabeceras CORS.
+            // ¡NO uses URLs directas a github.com, gitlab.com, etc.!
+            // RECOMENDACIÓN: Sube el archivo FBX a tu repo y usa una URL relativa.
+            //               Evita espacios y caracteres especiales en el nombre del archivo.
+            const modelUrl = 'planta_interior.fbx'; // <-- CAMBIA ESTO por el nombre (o ruta relativa) de tu archivo FBX en tu repo.
 
             console.log(`Intentando cargar modelo FBX desde: ${modelUrl}`);
             showMessage(`Cargando modelo FBX: ${modelUrl}...`, false);
 
             loader.load(
-                // URL del modelo
                 modelUrl,
-                // Callback onLoad (cuando se carga correctamente)
-                function (object) { // FBXLoader devuelve el objeto directamente
+                function (object) {
                     console.log("Modelo FBX cargado correctamente:", object);
-                    loadedModel = object; // El objeto cargado es el modelo
+                    loadedModel = object;
 
                     // --- Ajustes del modelo (¡IMPORTANTE!) ---
-                    // Escala: Los modelos FBX a menudo necesitan escalarse MUCHO
-                    loadedModel.scale.set(0.01, 0.01, 0.01); // Ejemplo: Escalar a 1/100 (ajustar según tu modelo)
+                    // Ajusta escala, posición y rotación según sea necesario para tu modelo.
+                    loadedModel.scale.set(0.01, 0.01, 0.01); // Ejemplo: Escalar (¡ajusta!)
+                    loadedModel.position.set(0, 0, -1.5);     // Ejemplo: Posición (Y=0 es el suelo con 'local-floor')
+                    // loadedModel.rotation.x = -Math.PI / 2; // Ejemplo: Rotación si es necesario
 
-                    // Posición: Colocarlo delante del usuario al inicio
-                    loadedModel.position.set(0, 0, -1.5); // Ejemplo: En el suelo (Y=0), 1.5m delante
-
-                    // Rotación (opcional):
-                    // loadedModel.rotation.x = -Math.PI / 2; // A veces los FBX vienen rotados
-
-                     // Es buena idea recorrer los hijos para asegurarse de que proyectan sombras, etc. (opcional)
-                     loadedModel.traverse(function (child) {
+                    loadedModel.traverse(function (child) {
                          if (child.isMesh) {
                              child.castShadow = true;
                              child.receiveShadow = true;
                          }
                      });
 
-                    scene.add(loadedModel); // Añadir el modelo a la escena principal
+                    scene.add(loadedModel);
                     console.log("Modelo FBX añadido a la escena.");
                     showMessage("Modelo FBX cargado. Escena lista.", false);
 
-                    // Ahora que el modelo cargó, podemos verificar WebXR
+                    // Ahora que el modelo cargó (o falló), verificar WebXR
                     checkXRSupport();
                 },
-                // Callback onProgress (mientras se carga)
                 function (xhr) {
                     const percentLoaded = (xhr.loaded / xhr.total * 100).toFixed(0);
                     console.log(`Modelo FBX ${percentLoaded}% cargado`);
-                    // Evitar que el mensaje de progreso oculte el de "cargado" rápidamente
                     if (percentLoaded < 100) {
                         showMessage(`Cargando modelo FBX: ${percentLoaded}%`, false);
                     }
                 },
-                // Callback onError (si falla la carga)
                 function (error) {
                     console.error("Error al cargar el modelo FBX:", error);
-                    showMessage(`Error al cargar modelo FBX: ${error.message || 'Ver consola'}`, true);
+                    // Mostrar un error más descriptivo si es posible
+                    let errorMsg = `Error al cargar modelo FBX: ${modelUrl}. `;
+                    if (error.target && error.target.status === 0) {
+                        errorMsg += 'Posible error de CORS o red. Asegúrate de que el modelo está en el mismo dominio o el servidor permite el acceso.';
+                    } else if (error.target && error.target.status === 404) {
+                        errorMsg += 'Error 404 (No encontrado). Verifica la URL.';
+                    } else {
+                        errorMsg += error.message ? error.message : '(Ver consola para detalles)';
+                    }
+                    showMessage(errorMsg, true);
                     // Aún así, intentar verificar WebXR
                      checkXRSupport();
                 }
             );
         }
 
-
         // --- Bucle de Renderizado ---
         function renderLoop(timestamp, frame) {
-            // Rotar el modelo lentamente si está cargado (opcional)
+            // ... (código idéntico) ...
             if (loadedModel) {
                  // loadedModel.rotation.y += 0.005;
             }
-            // Renderizar la escena
             if (renderer && scene && camera) {
                  renderer.render(scene, camera);
             }
         }
 
         // --- Funciones WebXR (checkXRSupport, startXRSession, onSessionEnded, endXRSession) ---
-        // (Sin cambios respecto a la versión anterior)
-
-        async function checkXRSupport() {
+        // (Sin cambios)
+        async function checkXRSupport() { /* ... código idéntico ... */
             console.log("--- Iniciando checkXRSupport ---");
             if (messageDiv.style.display === 'none' || messageDiv.textContent.startsWith('Cargando modelo')) {
                  showMessage("Verificando compatibilidad WebXR...", false);
             }
-            if (navigator.xr) { /* ... código idéntico ... */
+            if (navigator.xr) {
                 console.log("navigator.xr existe.");
                 try {
                     console.log("Intentando navigator.xr.isSessionSupported('immersive-ar')...");
@@ -239,7 +235,10 @@
                             showMessage("WebXR 'immersive-ar' compatible. ¡Listo!", false);
                          }
                     } else {
-                         showMessage("El modo 'immersive-ar' no es compatible.", true);
+                         // No mostrar este error si ya hay un error de carga de modelo
+                         if (!messageDiv.textContent.startsWith('Error al cargar')) {
+                            showMessage("El modo 'immersive-ar' no es compatible.", true);
+                         }
                         xrButton.disabled = true;
                         xrButton.textContent = "Modo AR no soportado";
                     }
@@ -257,7 +256,6 @@
             }
              console.log("--- Finalizando checkXRSupport ---");
         }
-
         async function startXRSession() { /* ... código idéntico ... */
             console.log("Intentando iniciar sesión XR...");
             showMessage("Iniciando sesión XR...", false);
@@ -299,8 +297,7 @@
                     checkXRSupport();
                 }
             }
-        }
-
+         }
         function onSessionEnded() { /* ... código idéntico ... */
             console.log("Evento 'sessionended' recibido.");
             if (xrSession) {
@@ -315,13 +312,12 @@
             checkXRSupport();
             showMessage("Sesión de Realidad Mixta terminada.", false);
              if (camera) {
-                camera.position.set(0, 1.6, 1.0); // Restaurar posición Z ajustada
+                camera.position.set(0, 1.6, 1.0);
                 camera.lookAt(0, 1, 0);
              }
-        }
-
+         }
         async function endXRSession() { /* ... código idéntico ... */
-             console.log("Intentando terminar la sesión XR manualmente...");
+            console.log("Intentando terminar la sesión XR manualmente...");
              xrButton.disabled = true;
              xrButton.textContent = "Saliendo...";
             if (xrSession) {
@@ -339,24 +335,20 @@
             }
         }
 
-
         // --- Inicio de la Aplicación ---
         document.addEventListener('DOMContentLoaded', () => {
+            // ... (código idéntico) ...
             console.log("Evento DOMContentLoaded recibido.");
             showMessage("DOM cargado. Inicializando Three.js...", false);
 
-            // Verificar dependencias básicas (THREE)
              if (typeof THREE === 'undefined') {
                  console.error("¡Error Crítico! THREE no está definido.");
                  showMessage("Error CRÍTICO: No se pudo cargar Three.js.", true);
                  return;
              }
-             // FBXLoader y fflate se verifican dentro de loadFBXModel
 
-            // Iniciar Three.js
             initThree();
 
-            // Listener para redimensionar
             window.addEventListener('resize', () => {
                  if (renderer && camera && !renderer.xr.isPresenting) {
                      camera.aspect = window.innerWidth / window.innerHeight;
@@ -372,6 +364,7 @@
     </script>
 </body>
 </html>
+
 
 
 
