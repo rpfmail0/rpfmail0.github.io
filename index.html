@@ -3,8 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>WebXR - Corrección Import Map</title> <script src="https://cdn.tailwindcss.com"></script>
-    <script type="importmap">
+    <title>WebXR - Usando ARButton</title> <script type="importmap">
         {
             "imports": {
                 "three": "https://cdn.jsdelivr.net/npm/three@0.163.0/build/three.module.js",
@@ -13,126 +12,106 @@
         }
     </script>
     <style>
-        /* ... (Estilos CSS idénticos) ... */
-         body { margin: 0; overflow: hidden; font-family: 'Inter', sans-serif; }
-        #xr-button {
-            position: absolute;
-            bottom: 20px;
-            left: 50%;
-            transform: translateX(-50%);
-            padding: 12px 24px;
-            font-size: 16px;
-            font-weight: bold;
-            color: white;
-            background-color: #4a90e2; /* Azul */
-            border: none;
-            border-radius: 8px;
-            cursor: pointer;
-            transition: background-color 0.3s ease;
-            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-            z-index: 10;
-        }
-        #xr-button:hover {
-            background-color: #357abd;
-        }
-        #xr-button:disabled {
-            background-color: #cccccc;
-            cursor: not-allowed;
-        }
-        #message {
-            position: absolute;
-            top: 20px;
-            left: 50%;
-            transform: translateX(-50%);
-            padding: 10px 20px;
-            background-color: rgba(0, 0, 0, 0.7);
-            color: white;
-            border-radius: 5px;
-            display: block;
-            text-align: center;
-            z-index: 10;
-            max-width: 90%;
-        }
+        body { margin: 0; overflow: hidden; font-family: sans-serif; }
         canvas { display: block; }
+        /* ARButton crea su propio estilo, pero podemos añadir algo si queremos */
+        #ARButton { /* ID por defecto que usa ARButton */
+             position: absolute;
+             bottom: 20px;
+             right: 20px;
+             padding: 12px;
+             border: none;
+             border-radius: 4px;
+             background: rgba(0, 0, 0, 0.6);
+             color: white;
+             font-weight: bold;
+             cursor: pointer;
+             z-index: 999;
+        }
+        #ARButton:hover {
+             background: rgba(0, 0, 0, 0.8);
+        }
+        #ARButton:disabled {
+             cursor: default;
+             opacity: 0.5;
+        }
     </style>
 </head>
 <body class="bg-gray-100">
-    <div id="message">Cargando escena...</div>
-    <button id="xr-button" disabled>Verificando compatibilidad...</button>
-
     <script type="module">
         // Importar componentes necesarios de Three.js
         import {
             Scene, PerspectiveCamera, WebGLRenderer, AmbientLight, DirectionalLight,
-            AxesHelper // Quitar otros no usados por ahora
+            AxesHelper
         } from 'three';
+        // Importar ARButton
+        import { ARButton } from 'three/addons/webxr/ARButton.js';
 
         console.log("Script (módulo) iniciado.");
 
         // Variables globales
         let scene, camera, renderer;
-        let xrSession = null;
-        let xrRefSpace = null;
-        let controller1;
+        let controller1; // Mando derecho
 
-        // Elementos del DOM
-        const xrButton = document.getElementById('xr-button');
-        const messageDiv = document.getElementById('message');
+        // Ya no necesitamos: xrSession, xrRefSpace, xrButton, messageDiv
 
-        // --- Función para mostrar mensajes ---
+        // --- Función para mostrar mensajes (la dejamos por si acaso para errores futuros) ---
         function showMessage(msg, isError = false) {
-              // ... (código idéntico) ...
-              if (messageDiv) {
-                messageDiv.textContent = msg;
-                messageDiv.style.color = isError ? '#FFCCCC' : 'white';
-                messageDiv.style.backgroundColor = isError ? 'rgba(150, 0, 0, 0.8)' : 'rgba(0, 0, 0, 0.7)';
-                messageDiv.style.display = 'block';
-                console.log(`Mensaje UI: ${msg}`);
-                if (!isError) {
-                    setTimeout(() => {
-                        if (messageDiv.textContent === msg && !isError) {
-                             messageDiv.style.display = 'none';
-                        }
-                    }, 6000);
-                }
-            } else {
-                console.error("Error: messageDiv no encontrado. Mensaje:", msg);
-            }
+              console.log(`Mensaje UI (simulado): ${msg}`, isError ? "(ERROR)" : "");
+              // Podríamos crear un div temporal si fuera necesario mostrar errores
+              if(isError) {
+                  alert("Error: " + msg); // Simple alerta para errores críticos
+              }
         }
 
         // --- Inicializar Three.js y Configuración XR ---
         function initThree() {
              try {
                 console.log("Iniciando Three.js v0.163.0...");
-                showMessage("Iniciando Three.js...", false);
+                //showMessage("Iniciando Three.js...", false); // ARButton da feedback
                 scene = new Scene();
 
                 const axesHelper = new AxesHelper( 2 );
                 scene.add( axesHelper );
 
                 camera = new PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
-                camera.position.set(0, 1.6, 5.0);
-                camera.lookAt(0, 1, 0);
+                // La posición inicial de la cámara es menos relevante con ARButton/WebXR
+                // camera.position.set(0, 1.6, 5.0);
+                // camera.lookAt(0, 1, 0);
 
                 renderer = new WebGLRenderer({ antialias: true, alpha: true });
                 renderer.setSize(window.innerWidth, window.innerHeight);
                 renderer.setPixelRatio(window.devicePixelRatio);
-                renderer.xr.enabled = true;
+                renderer.xr.enabled = true; // Habilitar WebXR ANTES de crear ARButton
                 document.body.appendChild(renderer.domElement);
                 console.log("Renderer añadido al DOM.");
 
+                // --- Crear y añadir ARButton ---
+                // ARButton se encarga de verificar compatibilidad y manejar sesiones
+                // Podemos pasarle opciones de sesión si queremos
+                const button = ARButton.createButton(renderer, {
+                     requiredFeatures: ['local-floor'] // Intentar pedir 'local-floor'
+                     // Opciones adicionales como 'domOverlay' podrían ir aquí
+                });
+                document.body.appendChild(button); // Añadir el botón creado al DOM
+                console.log("ARButton añadido.");
+                // Ya no llamamos a checkXRSupport manualmente
+
+                // --- Luces ---
                 const ambientLight = new AmbientLight(0xffffff, 0.8);
                 scene.add(ambientLight);
                 const directionalLight = new DirectionalLight(0xffffff, 0.5);
                 directionalLight.position.set(1, 2, 1).normalize();
                 scene.add(directionalLight);
 
+                // --- Configurar Mandos (Mínimo) ---
                 setupControllersMinimal();
 
+                // --- Carga de Modelo Comentada ---
                 console.log("Carga de modelo FBX OMITIDA para depuración.");
-                showMessage("Modelo omitido (debug). Escena lista.", false);
-                checkXRSupport();
+                // showMessage("Modelo omitido (debug). Escena lista.", false);
 
+                // Iniciar bucle de renderizado
                 renderer.setAnimationLoop(renderLoop);
                 console.log("Bucle de animación iniciado.");
                 return true;
@@ -140,168 +119,42 @@
             } catch (error) {
                 console.error("Error fatal al inicializar Three.js:", error);
                 showMessage(`Error CRÍTICO en Three.js: ${error.message}`, true);
-                 if(xrButton) {
-                    xrButton.disabled = true;
-                    xrButton.textContent = "Error de inicialización";
-                 }
                 return false;
             }
         }
 
         // --- Configuración de Mandos Mínima ---
         function setupControllersMinimal() {
-            controller1 = renderer.xr.getController(1); // Mando derecho
+            // Mando Derecho (índice 1)
+            // Es importante obtenerlo aquí para que esté disponible
+            controller1 = renderer.xr.getController(1);
             scene.add(controller1);
             console.log("Mandos configurados (mínimo).");
+            // Listeners y visualización se añadirán después si esto funciona
         }
 
         // --- Bucle de Renderizado ---
         function renderLoop(timestamp, frame) {
+            // frame es proporcionado por WebXR cuando está en sesión
+            // Podemos usarlo para lógica más avanzada si es necesario
+
+            // Renderizar la escena
             if (renderer && scene && camera) {
                  renderer.render(scene, camera);
             }
         }
 
-        // --- Funciones WebXR ---
-        async function checkXRSupport() {
-              // ... (código idéntico) ...
-               console.log("--- Iniciando checkXRSupport ---");
-            const currentMsg = messageDiv.textContent;
-            const showCheckMsg = !currentMsg.includes('Error') && !currentMsg.includes('Modelo omitido');
-
-            if (showCheckMsg) {
-                 showMessage("Verificando compatibilidad WebXR...", false);
-            }
-
-            if (navigator.xr) {
-                console.log("navigator.xr existe.");
-                try {
-                    console.log("Intentando navigator.xr.isSessionSupported('immersive-ar')...");
-                    const supported = await navigator.xr.isSessionSupported('immersive-ar');
-                    console.log(`isSessionSupported('immersive-ar') devolvió: ${supported}`);
-                    if (supported) {
-                        xrButton.disabled = false;
-                        xrButton.textContent = 'Iniciar Realidad Mixta';
-                        xrButton.onclick = startXRSession;
-                         if (showCheckMsg) {
-                            showMessage("WebXR 'immersive-ar' compatible. ¡Listo!", false);
-                         }
-                    } else {
-                         showMessage("El modo 'immersive-ar' no es compatible.", true);
-                         xrButton.disabled = true;
-                         xrButton.textContent = "Modo AR no soportado";
-                    }
-                } catch (error) {
-                    console.error("Error dentro de isSessionSupported:", error);
-                    showMessage(`Error al comprobar compatibilidad: ${error.message}`, true);
-                    xrButton.disabled = true;
-                    xrButton.textContent = "Error de compatibilidad";
-                }
-            } else {
-                console.log("navigator.xr NO existe.");
-                showMessage("WebXR no es compatible con este navegador.", true);
-                xrButton.disabled = true;
-                xrButton.textContent = "WebXR no soportado";
-            }
-             console.log("--- Finalizando checkXRSupport ---");
-        }
-
-        async function startXRSession() {
-             // ... (Usando 'local' ref space como en la versión anterior) ...
-              console.log("--- Iniciando startXRSession ---");
-            showMessage("Iniciando sesión XR...", false);
-            xrButton.disabled = true;
-            xrButton.textContent = "Iniciando...";
-
-            if (!xrSession) {
-                try {
-                    console.log("Paso 1: Solicitando navigator.xr.requestSession('immersive-ar')... (sin features)");
-                    xrSession = await navigator.xr.requestSession('immersive-ar');
-                    console.log("Paso 1: ¡Sesión XR obtenida!", xrSession);
-
-                    console.log("Paso 2: Configurando renderer.xr.setSession...");
-                    await renderer.xr.setSession(xrSession);
-                    console.log("Paso 2: ¡Sesión asignada al renderer XR!");
-
-                    console.log("Paso 3: Solicitando xrSession.requestReferenceSpace('local')...");
-                    xrRefSpace = await xrSession.requestReferenceSpace('local');
-                    console.log("Paso 3: ¡Espacio de referencia 'local' obtenido!");
-
-
-                    xrButton.textContent = 'Salir de Realidad Mixta';
-                    xrButton.onclick = endXRSession;
-                    xrButton.disabled = false;
-                    messageDiv.style.display = 'none';
-                    console.log("--- ¡startXRSession completado con éxito! ---");
-
-                    xrSession.addEventListener('end', onSessionEnded);
-
-                } catch (error) {
-                    console.error("--- ERROR durante startXRSession ---:", error);
-                    showMessage(`Error al iniciar la sesión (probando RefSpace 'local'): ${error.message}`, true);
-                    if (xrSession) {
-                        try { await xrSession.end(); } catch (e) { console.error("Error al intentar terminar sesión fallida:", e); }
-                        xrSession = null;
-                    }
-                    xrButton.textContent = 'Iniciar Realidad Mixta';
-                    xrButton.onclick = startXRSession;
-                    checkXRSupport();
-                }
-            } else {
-                 console.warn("Se intentó llamar a startXRSession cuando ya existía una sesión.");
-            }
-        }
-
-        function onSessionEnded() {
-              // ... (código idéntico) ...
-                console.log("Evento 'sessionended' recibido.");
-            if (xrSession) {
-                xrSession.removeEventListener('end', onSessionEnded);
-                xrSession = null;
-            }
-            if (renderer && renderer.xr) {
-                 renderer.xr.setSession(null).catch((err) => {
-                     console.warn("Advertencia al intentar setSession(null):", err);
-                 });
-            }
-            xrButton.textContent = 'Iniciar Realidad Mixta';
-            xrButton.onclick = startXRSession;
-            checkXRSupport();
-            showMessage("Sesión de Realidad Mixta terminada.", false);
-             if (camera) {
-                camera.position.set(0, 1.6, 5.0);
-                camera.lookAt(0, 1, 0);
-             }
-        }
-
-        async function endXRSession() {
-               // ... (código idéntico) ...
-                 console.log("Intentando terminar la sesión XR manually...");
-             xrButton.disabled = true;
-             xrButton.textContent = "Saliendo...";
-            if (xrSession) {
-                try {
-                    await xrSession.end();
-                    console.log("Llamada a xrSession.end() completada.");
-                } catch (error) {
-                    console.error("Error al terminar la sesión WebXR:", error);
-                    showMessage(`Error al salir de la sesión: ${error.message}`, true);
-                    onSessionEnded();
-                }
-            } else {
-                 console.warn("Se intentó llamar a endXRSession sin una sesión activa.");
-                 onSessionEnded();
-            }
-        }
-
+        // --- Funciones WebXR Manuales Eliminadas ---
+        // checkXRSupport, startXRSession, onSessionEnded, endXRSession
 
         // --- Inicio de la Aplicación ---
         document.addEventListener('DOMContentLoaded', () => {
-              // ... (código idéntico) ...
-                console.log("Evento DOMContentLoaded recibido.");
+              console.log("Evento DOMContentLoaded recibido.");
              initThree();
 
+             // Listener de redimensionado
              window.addEventListener('resize', () => {
+                 // Solo redimensionar si NO estamos en sesión XR
                  if (renderer && camera && !renderer.xr.isPresenting) {
                      camera.aspect = window.innerWidth / window.innerHeight;
                      camera.updateProjectionMatrix();
@@ -316,6 +169,7 @@
     </script>
 </body>
 </html>
+
 
 
 
