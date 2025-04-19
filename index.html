@@ -3,7 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>WebXR - Modelo FBX e Interacción con ARButton</title> <script type="importmap">
+    <title>WebXR - Modelo FBX e Interacción con ARButton</title>
+    <script type="importmap">
         {
             "imports": {
                 "three": "https://cdn.jsdelivr.net/npm/three@0.163.0/build/three.module.js",
@@ -58,10 +59,10 @@
         let controller1; // Mando derecho
         let raycaster;
         let tempMatrix = new THREE.Matrix4();
-        let grabbingController = null; // Qué mando está agarrando (si tuviéramos 2)
-        let grabbedObject = null; // Qué objeto está agarrado
-        let loadedModel = null; // Referencia al modelo FBX cargado
-        let modelBoxHelper = null; // Ayudante visual
+        let grabbingController = null;
+        let grabbedObject = null;
+        let loadedModel = null;
+        let modelBoxHelper = null;
 
         // --- Función para mostrar mensajes (simple alerta para errores) ---
         function showMessage(msg, isError = false) {
@@ -104,10 +105,10 @@
                 scene.add(directionalLight);
 
                 // --- Configurar Mandos (con listeners y visualización) ---
-                setupControllers(); // Usar la función completa ahora
+                setupControllers();
 
                 // --- Cargar Modelo FBX ---
-                loadFBXModel(); // Activar carga del modelo
+                loadFBXModel();
 
                 // Iniciar bucle de renderizado
                 renderer.setAnimationLoop(renderLoop);
@@ -131,8 +132,8 @@
             console.log("Mando 1 (Der) añadido y listeners configurados.");
 
             // Añadir visualización básica al mando derecho
-            const controllerMaterial = new THREE.LineBasicMaterial({ color: 0xffffff, linewidth: 2 });
-            const controllerGeometry = new THREE.BufferGeometry().setFromPoints([
+            const controllerMaterial = new LineBasicMaterial({ color: 0xffffff, linewidth: 2 });
+            const controllerGeometry = new BufferGeometry().setFromPoints([
                 new Vector3(0, 0, 0),
                 new Vector3(0, 0, -0.5) // Línea de 50cm
             ]);
@@ -149,9 +150,7 @@
         // --- Cargar Modelo FBX ---
         function loadFBXModel() {
             const loader = new FBXLoader();
-            // FBXLoader en versiones recientes puede necesitar que se le pase fflate
-            // aunque a menudo lo detecta globalmente si se importó. Por si acaso:
-            // loader.setDecompressor(fflate); // Descomentar si hay problemas de descompresión
+            // loader.setDecompressor(fflate); // Descomentar si hay problemas
 
             const modelUrl = 'planta_interior_2.fbx';
             console.log(`Intentando cargar modelo FBX desde: ${modelUrl}`);
@@ -163,8 +162,8 @@
                     console.log("Modelo FBX cargado correctamente:", object);
                     loadedModel = object;
 
-                    loadedModel.scale.set(0.001, 0.001, 0.001); // Escala ajustada
-                    loadedModel.position.set(0, 1.0, -1.5); // Posición ajustada
+                    loadedModel.scale.set(0.001, 0.001, 0.001);
+                    loadedModel.position.set(0, 1.0, -1.5);
 
                      loadedModel.traverse(function (child) {
                          if (child.isMesh) {
@@ -176,9 +175,8 @@
                     scene.add(loadedModel);
                     console.log("Modelo FBX añadido a la escena.");
 
-                    // Añadir BoxHelper
                     if (modelBoxHelper) scene.remove(modelBoxHelper);
-                    modelBoxHelper = new BoxHelper( loadedModel, 0xffff00 ); // Amarillo
+                    modelBoxHelper = new BoxHelper( loadedModel, 0xffff00 );
                     scene.add( modelBoxHelper );
                     console.log("BoxHelper añadido/actualizado para el modelo.");
                 },
@@ -197,11 +195,11 @@
 
         // --- Manejadores de Eventos de Selección ---
         function onSelectStart(event) {
-            const controller = event.target; // Mando que disparó (asumimos controller1)
+            const controller = event.target;
             console.log("Evento: selectstart detectado");
 
-            if (grabbingController) return; // Ya está agarrando algo
-            if (!loadedModel) return; // Modelo no cargado
+            if (grabbingController) return;
+            if (!loadedModel) return;
 
             tempMatrix.identity().extractRotation(controller.matrixWorld);
             raycaster.ray.origin.setFromMatrixPosition(controller.matrixWorld);
@@ -213,9 +211,8 @@
             if (intersects.length > 0) {
                 console.log("DEBUG: ¡Intersección con el modelo FBX!");
                 grabbedObject = loadedModel;
-                // Usar attach para que se mueva con el mando
                 controller.attach(grabbedObject);
-                grabbingController = controller; // Marcar que este mando está agarrando
+                grabbingController = controller;
                 console.log("DEBUG: Modelo FBX agarrado.");
                 if (modelBoxHelper) modelBoxHelper.visible = false;
             } else {
@@ -227,10 +224,8 @@
             const controller = event.target;
             console.log("Evento: selectend detectado");
 
-            // Solo soltar si este mando estaba agarrando el objeto
             if (grabbingController === controller && grabbedObject) {
                 console.log("DEBUG: Soltando el modelo FBX.");
-                // Readjuntar a la escena manteniendo transformación global
                 scene.attach(grabbedObject);
                 grabbedObject = null;
                 grabbingController = null;
@@ -240,7 +235,6 @@
 
         // --- Redimensionar Ventana ---
         function onWindowResize() {
-            // Solo redimensionar si NO estamos en sesión XR
             if (renderer && camera && !renderer.xr.isPresenting) {
                 camera.aspect = window.innerWidth / window.innerHeight;
                 camera.updateProjectionMatrix();
@@ -251,12 +245,9 @@
 
         // --- Bucle de Animación/Renderizado ---
         function animate(timestamp, frame) {
-            // Actualizar BoxHelper si existe y es visible
             if (modelBoxHelper && modelBoxHelper.visible) {
                 modelBoxHelper.update();
             }
-
-            // Renderizar la escena
             renderer.render(scene, camera);
         }
 
@@ -272,8 +263,3 @@
     </script>
 </body>
 </html>
-
-
-
-
-
