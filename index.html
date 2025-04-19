@@ -3,13 +3,10 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>WebXR con Modelo 3D (FBX) - Debug</title>
+    <title>WebXR con Modelo 3D (FBX) - Ajuste Escala</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/libs/fflate.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/FBXLoader.js"></script>
-
-    <style>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/libs/fflate.min.js"></script> <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/FBXLoader.js"></script> <style>
         body { margin: 0; overflow: hidden; font-family: 'Inter', sans-serif; }
         #xr-button {
             position: absolute;
@@ -71,7 +68,7 @@
         // --- Función para mostrar mensajes ---
         function showMessage(msg, isError = false) {
             // ... (código idéntico) ...
-            if (messageDiv) {
+             if (messageDiv) {
                 messageDiv.textContent = msg;
                 messageDiv.style.color = isError ? '#FFCCCC' : 'white';
                 messageDiv.style.backgroundColor = isError ? 'rgba(150, 0, 0, 0.8)' : 'rgba(0, 0, 0, 0.7)';
@@ -92,7 +89,7 @@
         // --- Inicializar Three.js ---
         function initThree() {
             // ... (código idéntico) ...
-            try {
+             try {
                 console.log("Iniciando Three.js...");
                 showMessage("Iniciando Three.js...", false);
                 scene = new THREE.Scene();
@@ -101,8 +98,9 @@
                 const axesHelper = new THREE.AxesHelper( 2 ); // Longitud de los ejes: 2 unidades
                 scene.add( axesHelper );
 
+                // Mover cámara más atrás para ver objetos grandes
                 camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
-                camera.position.set(0, 1.6, 1.0);
+                camera.position.set(0, 1.6, 5.0); // <-- Cámara más atrás (era 1.0)
                 camera.lookAt(0, 1, 0);
 
                 renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
@@ -137,14 +135,15 @@
 
         // --- Función para Cargar el Modelo FBX ---
         function loadFBXModel() {
-            if (typeof THREE.FBXLoader === 'undefined') {
+             // ... (verificación de FBXLoader idéntica) ...
+             if (typeof THREE.FBXLoader === 'undefined') {
                  console.error("THREE.FBXLoader no está definido.");
                  showMessage("Error: Falta FBXLoader.", true);
                  return;
             }
 
             const loader = new THREE.FBXLoader();
-            const modelUrl = 'planta_interior_2.fbx'; // <-- Nombre del archivo FBX en tu repo
+            const modelUrl = 'planta_interior_2.fbx'; // <-- Nombre del archivo FBX
 
             console.log(`Intentando cargar modelo FBX desde: ${modelUrl}`);
             showMessage(`Cargando modelo FBX: ${modelUrl}...`, false);
@@ -156,10 +155,13 @@
                     loadedModel = object;
 
                     // --- Ajustes del modelo (¡IMPORTANTE!) ---
-                    // EXPERIMENTA con estos valores si el modelo no se ve o es muy pequeño/grande
-                    loadedModel.scale.set(0.1, 0.1, 0.1);   // Prueba inicial (era 0.01) - ¡AJUSTA SEGÚN NECESITES! (prueba 1, 0.5, 0.05 etc.)
-                    loadedModel.position.set(0, 1.0, -1.5); // Posición inicial (Y=1.0 para estar a la altura de la vista)
-                    // loadedModel.rotation.x = -Math.PI / 2; // Rotación si es necesario
+                    // REDUCIR AÚN MÁS LA ESCALA INICIAL. ¡AJUSTA ESTE VALOR!
+                    // Si el BoxHelper amarillo era enorme, prueba valores aún más pequeños.
+                    loadedModel.scale.set(0.005, 0.005, 0.005); // <-- Escala MUCHO más pequeña (era 0.1)
+                                                               // Prueba 0.01, 0.001, etc. si sigue siendo grande/invisible
+
+                    loadedModel.position.set(0, 1.0, -1.5); // Mantener posición Y=1.0, Z=-1.5
+                    // loadedModel.rotation.x = -Math.PI / 2;
 
                     loadedModel.traverse(function (child) {
                          if (child.isMesh) {
@@ -171,15 +173,15 @@
                     scene.add(loadedModel);
                     console.log("Modelo FBX añadido a la escena.");
 
-                    // --- Añadir BoxHelper para depuración ---
-                    // Esto dibujará una caja alrededor del modelo, útil si el modelo no es visible
+                    // --- Añadir/Actualizar BoxHelper ---
+                    if (modelBoxHelper) scene.remove(modelBoxHelper); // Quitar el viejo si existe
                     modelBoxHelper = new THREE.BoxHelper( loadedModel, 0xffff00 ); // Caja amarilla
                     scene.add( modelBoxHelper );
-                    console.log("BoxHelper añadido para el modelo.");
+                    console.log("BoxHelper añadido/actualizado para el modelo.");
                     // ----------------------------------------
 
                     showMessage("Modelo FBX cargado. Escena lista.", false);
-                    checkXRSupport(); // Verificar WebXR después de cargar
+                    checkXRSupport();
                 },
                 function (xhr) {
                     // ... (código idéntico) ...
@@ -190,8 +192,8 @@
                     }
                 },
                 function (error) {
-                     // ... (código idéntico) ...
-                    console.error("Error al cargar el modelo FBX:", error);
+                    // ... (código idéntico) ...
+                     console.error("Error al cargar el modelo FBX:", error);
                     let errorMsg = `Error al cargar modelo FBX: ${modelUrl}. `;
                     if (error.target && error.target.status === 0) {
                         errorMsg += 'Posible error de CORS o red.';
@@ -201,34 +203,26 @@
                         errorMsg += error.message ? error.message : '(Ver consola para detalles)';
                     }
                     showMessage(errorMsg, true);
-                     checkXRSupport(); // Verificar WebXR igualmente
+                     checkXRSupport();
                 }
             );
         }
 
         // --- Bucle de Renderizado ---
         function renderLoop(timestamp, frame) {
-            // Actualizar el BoxHelper si el modelo se mueve/anima (opcional)
+            // ... (código idéntico) ...
             if (modelBoxHelper) {
                 modelBoxHelper.update();
             }
-
-            // Rotar modelo (opcional, descomentar para probar)
-            // if (loadedModel) {
-            //      loadedModel.rotation.y += 0.005;
-            // }
-
-            // Renderizar la escena
             if (renderer && scene && camera) {
                  renderer.render(scene, camera);
             }
         }
 
         // --- Funciones WebXR (checkXRSupport, startXRSession, onSessionEnded, endXRSession) ---
-        // (Sin cambios, excepto que checkXRSupport ahora debería detectar soporte)
-        async function checkXRSupport() {
-            console.log("--- Iniciando checkXRSupport ---");
-            // No mostrar mensaje si ya hay uno importante (carga, error)
+        // (Sin cambios)
+        async function checkXRSupport() { /* ... código idéntico ... */
+             console.log("--- Iniciando checkXRSupport ---");
             const currentMsg = messageDiv.textContent;
             const showCheckMsg = !currentMsg.includes('Error') && !currentMsg.includes('cargado');
 
@@ -246,11 +240,10 @@
                         xrButton.disabled = false;
                         xrButton.textContent = 'Iniciar Realidad Mixta';
                         xrButton.onclick = startXRSession;
-                         if (showCheckMsg) { // Mostrar mensaje de éxito solo si no había otro
+                         if (showCheckMsg) {
                             showMessage("WebXR 'immersive-ar' compatible. ¡Listo!", false);
                          }
                     } else {
-                         // No mostrar este error si ya hay un error de carga de modelo
                          if (!messageDiv.textContent.startsWith('Error al cargar')) {
                             showMessage("El modo 'immersive-ar' no es compatible.", true);
                          }
@@ -272,7 +265,7 @@
              console.log("--- Finalizando checkXRSupport ---");
         }
         async function startXRSession() { /* ... código idéntico ... */
-             console.log("Intentando iniciar sesión XR...");
+            console.log("Intentando iniciar sesión XR...");
             showMessage("Iniciando sesión XR...", false);
             xrButton.disabled = true;
             xrButton.textContent = "Iniciando...";
@@ -314,7 +307,7 @@
             }
         }
         function onSessionEnded() { /* ... código idéntico ... */
-            console.log("Evento 'sessionended' recibido.");
+             console.log("Evento 'sessionended' recibido.");
             if (xrSession) {
                 xrSession.removeEventListener('end', onSessionEnded);
                 xrSession = null;
@@ -327,12 +320,12 @@
             checkXRSupport();
             showMessage("Sesión de Realidad Mixta terminada.", false);
              if (camera) {
-                camera.position.set(0, 1.6, 1.0);
+                camera.position.set(0, 1.6, 5.0); // Restaurar posición Z de cámara alejada
                 camera.lookAt(0, 1, 0);
              }
          }
         async function endXRSession() { /* ... código idéntico ... */
-            console.log("Intentando terminar la sesión XR manualmente...");
+             console.log("Intentando terminar la sesión XR manualmente...");
              xrButton.disabled = true;
              xrButton.textContent = "Saliendo...";
             if (xrSession) {
@@ -354,7 +347,7 @@
         // --- Inicio de la Aplicación ---
         document.addEventListener('DOMContentLoaded', () => {
             // ... (código idéntico) ...
-             console.log("Evento DOMContentLoaded recibido.");
+              console.log("Evento DOMContentLoaded recibido.");
             showMessage("DOM cargado. Inicializando Three.js...", false);
 
              if (typeof THREE === 'undefined') {
@@ -380,6 +373,7 @@
     </script>
 </body>
 </html>
+
 
 
 
