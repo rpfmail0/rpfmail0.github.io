@@ -2,115 +2,123 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>WebXR - Modelo FBX e Interacción con ARButton</title>
-    <script type="importmap">
-        {
-            "imports": {
-                "three": "https://cdn.jsdelivr.net/npm/three@0.163.0/build/three.module.js",
-                "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.163.0/examples/jsm/",
-                "fflate": "https://unpkg.com/fflate@0.8.1/esm/index.js" /* Añadido para FBXLoader */
-            }
-        }
-    </script>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WebXR con Modelo 3D (FBX) - Restaurar Materiales</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/libs/fflate.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/FBXLoader.js"></script>
+
     <style>
-        body { margin: 0; overflow: hidden; font-family: sans-serif; }
+        body { margin: 0; overflow: hidden; font-family: 'Inter', sans-serif; }
+        #xr-button {
+            position: absolute;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            padding: 12px 24px;
+            font-size: 16px;
+            font-weight: bold;
+            color: white;
+            background-color: #4a90e2; /* Azul */
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: background-color 0.3s ease;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            z-index: 10;
+        }
+        #xr-button:hover {
+            background-color: #357abd;
+        }
+        #xr-button:disabled {
+            background-color: #cccccc;
+            cursor: not-allowed;
+        }
+        #message {
+            position: absolute;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            padding: 10px 20px;
+            background-color: rgba(0, 0, 0, 0.7);
+            color: white;
+            border-radius: 5px;
+            display: block;
+            text-align: center;
+            z-index: 10;
+            max-width: 90%;
+        }
         canvas { display: block; }
-        #ARButton { /* Estilo para el botón de ARButton */
-             position: absolute;
-             bottom: 20px;
-             right: 20px;
-             padding: 12px;
-             border: none;
-             border-radius: 4px;
-             background: rgba(0, 0, 0, 0.6);
-             color: white;
-             font-weight: bold;
-             cursor: pointer;
-             z-index: 999;
-        }
-        #ARButton:hover {
-             background: rgba(0, 0, 0, 0.8);
-        }
-        #ARButton:disabled {
-             cursor: default;
-             opacity: 0.5;
-        }
     </style>
 </head>
 <body class="bg-gray-100">
-    <script type="module">
-        // Importaciones Principales
-        import {
-            Scene, PerspectiveCamera, WebGLRenderer, AmbientLight, DirectionalLight,
-            AxesHelper, Raycaster, Vector3, Matrix4, LineBasicMaterial, BufferGeometry, Line,
-            BoxHelper // Importar BoxHelper
-        } from 'three';
-        // Importar ARButton
-        import { ARButton } from 'three/addons/webxr/ARButton.js';
-        // Importar FBXLoader y dependencia fflate
-        import { FBXLoader } from 'three/addons/loaders/FBXLoader.js';
-        import * as fflate from 'fflate'; // Necesario para FBXLoader
+    <div id="message">Cargando escena...</div>
+    <button id="xr-button" disabled>Verificando compatibilidad...</button>
 
-        console.log("Script (módulo) iniciado.");
-
+    <script>
+        console.log("Script iniciado.");
         // Variables globales
         let scene, camera, renderer;
-        let controller1; // Mando derecho
-        let raycaster;
-        let tempMatrix = new THREE.Matrix4();
-        let grabbingController = null;
-        let grabbedObject = null;
+        let xrSession = null;
+        let xrRefSpace = null;
         let loadedModel = null;
-        let modelBoxHelper = null;
+        let modelBoxHelper = null; // Referencia al BoxHelper
 
-        // --- Función para mostrar mensajes (simple alerta para errores) ---
+        const xrButton = document.getElementById('xr-button');
+        const messageDiv = document.getElementById('message');
+
+        // --- Función para mostrar mensajes ---
         function showMessage(msg, isError = false) {
-              console.log(`Mensaje: ${msg}`, isError ? "(ERROR)" : "");
-              if(isError) {
-                  alert("Error: " + msg);
-              }
+             // ... (código idéntico) ...
+             if (messageDiv) {
+                messageDiv.textContent = msg;
+                messageDiv.style.color = isError ? '#FFCCCC' : 'white';
+                messageDiv.style.backgroundColor = isError ? 'rgba(150, 0, 0, 0.8)' : 'rgba(0, 0, 0, 0.7)';
+                messageDiv.style.display = 'block';
+                console.log(`Mensaje UI: ${msg}`);
+                if (!isError) {
+                    setTimeout(() => {
+                        if (messageDiv.textContent === msg && !isError) {
+                             messageDiv.style.display = 'none';
+                        }
+                    }, 6000);
+                }
+            } else {
+                console.error("Error: messageDiv no encontrado. Mensaje:", msg);
+            }
         }
 
-        // --- Inicializar Three.js y Configuración XR ---
+        // --- Inicializar Three.js ---
         function initThree() {
+            // ... (código idéntico) ...
              try {
-                console.log("Iniciando Three.js v0.163.0...");
-                scene = new Scene();
+                console.log("Iniciando Three.js...");
+                showMessage("Iniciando Three.js...", false);
+                scene = new THREE.Scene();
 
-                const axesHelper = new AxesHelper( 2 );
+                const axesHelper = new THREE.AxesHelper( 2 );
                 scene.add( axesHelper );
 
-                camera = new PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+                camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+                camera.position.set(0, 1.6, 5.0); // Cámara más atrás
+                camera.lookAt(0, 1, 0);
 
-                renderer = new WebGLRenderer({ antialias: true, alpha: true });
+                renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
                 renderer.setSize(window.innerWidth, window.innerHeight);
                 renderer.setPixelRatio(window.devicePixelRatio);
                 renderer.xr.enabled = true;
                 document.body.appendChild(renderer.domElement);
                 console.log("Renderer añadido al DOM.");
 
-                // --- Crear y añadir ARButton ---
-                const button = ARButton.createButton(renderer, {
-                     requiredFeatures: ['local-floor']
-                });
-                document.body.appendChild(button);
-                console.log("ARButton añadido.");
-
-                // --- Luces ---
-                const ambientLight = new AmbientLight(0xffffff, 0.8);
+                const ambientLight = new THREE.AmbientLight(0xffffff, 0.8);
                 scene.add(ambientLight);
-                const directionalLight = new DirectionalLight(0xffffff, 0.5);
+                const directionalLight = new THREE.DirectionalLight(0xffffff, 0.5);
                 directionalLight.position.set(1, 2, 1).normalize();
                 scene.add(directionalLight);
 
-                // --- Configurar Mandos (con listeners y visualización) ---
-                setupControllers();
-
-                // --- Cargar Modelo FBX ---
                 loadFBXModel();
 
-                // Iniciar bucle de renderizado
                 renderer.setAnimationLoop(renderLoop);
                 console.log("Bucle de animación iniciado.");
                 return true;
@@ -118,53 +126,59 @@
             } catch (error) {
                 console.error("Error fatal al inicializar Three.js:", error);
                 showMessage(`Error CRÍTICO en Three.js: ${error.message}`, true);
+                 if(xrButton) {
+                    xrButton.disabled = true;
+                    xrButton.textContent = "Error de inicialización";
+                 }
                 return false;
             }
         }
 
-         // --- Configuración de Mandos (Completa) ---
-         function setupControllers() {
-            // Mando Derecho (index 1)
-            controller1 = renderer.xr.getController(1);
-            controller1.addEventListener('selectstart', onSelectStart);
-            controller1.addEventListener('selectend', onSelectEnd);
-            scene.add(controller1);
-            console.log("Mando 1 (Der) añadido y listeners configurados.");
-
-            // Añadir visualización básica al mando derecho
-            const controllerMaterial = new LineBasicMaterial({ color: 0xffffff, linewidth: 2 });
-            const controllerGeometry = new BufferGeometry().setFromPoints([
-                new Vector3(0, 0, 0),
-                new Vector3(0, 0, -0.5) // Línea de 50cm
-            ]);
-
-            const line1 = new Line(controllerGeometry, controllerMaterial);
-            controller1.add(line1);
-            console.log("Visualización añadida al mando 1.");
-
-            // Configurar Raycaster
-            raycaster = new Raycaster();
-            console.log("Raycaster configurado.");
-        }
-
-        // --- Cargar Modelo FBX ---
+        // --- Función para Cargar el Modelo FBX ---
         function loadFBXModel() {
-            const loader = new FBXLoader();
-            // loader.setDecompressor(fflate); // Descomentar si hay problemas
+             // ... (verificación de FBXLoader idéntica) ...
+              if (typeof THREE.FBXLoader === 'undefined') {
+                 console.error("THREE.FBXLoader no está definido.");
+                 showMessage("Error: Falta FBXLoader.", true);
+                 return;
+            }
 
-            const modelUrl = 'planta_interior_2.fbx';
+            const loader = new THREE.FBXLoader();
+            const modelUrl = 'planta_interior_2.fbx'; // <-- Nombre del archivo FBX
+
             console.log(`Intentando cargar modelo FBX desde: ${modelUrl}`);
+            showMessage(`Cargando modelo FBX: ${modelUrl}...`, false);
 
             loader.load(
                 modelUrl,
-                // onLoad
                 function (object) {
                     console.log("Modelo FBX cargado correctamente:", object);
                     loadedModel = object;
 
+                    // --- Ajustes del modelo ---
+                    // Usar la escala que funcionó para hacerlo visible
                     loadedModel.scale.set(0.001, 0.001, 0.001);
                     loadedModel.position.set(0, 1.0, -1.5);
+                    // loadedModel.rotation.x = -Math.PI / 2;
 
+                    // --- Material de Depuración Comentado ---
+                    /* // DESCOMENTA ESTO SI EL MODELO VUELVE A SER INVISIBLE
+                    const overrideMaterial = new THREE.MeshBasicMaterial({
+                        color: 0xff0000, // Rojo brillante
+                        side: THREE.DoubleSide // Renderizar por ambos lados
+                    });
+                    loadedModel.traverse(function (child) {
+                        if (child.isMesh) {
+                            child.material = overrideMaterial;
+                            child.castShadow = true;
+                            child.receiveShadow = true;
+                        }
+                    });
+                    console.log("Materiales reemplazados por material básico rojo (DEBUG).");
+                    */
+                    // ---------------------------------------------
+
+                    // Asegurarse de que las mallas proyecten/reciban sombras con sus materiales originales
                      loadedModel.traverse(function (child) {
                          if (child.isMesh) {
                              child.castShadow = true;
@@ -172,94 +186,209 @@
                          }
                      });
 
+
                     scene.add(loadedModel);
                     console.log("Modelo FBX añadido a la escena.");
 
+                    // --- Añadir/Actualizar BoxHelper ---
+                    // Lo mantenemos por ahora, es útil
                     if (modelBoxHelper) scene.remove(modelBoxHelper);
-                    modelBoxHelper = new BoxHelper( loadedModel, 0xffff00 );
+                    modelBoxHelper = new THREE.BoxHelper( loadedModel, 0xffff00 ); // Caja amarilla
                     scene.add( modelBoxHelper );
                     console.log("BoxHelper añadido/actualizado para el modelo.");
+                    // ----------------------------------------
+
+                    showMessage("Modelo FBX cargado. Escena lista.", false);
+                    checkXRSupport();
                 },
-                // onProgress
                 function (xhr) {
+                    // ... (código idéntico) ...
                     const percentLoaded = (xhr.loaded / xhr.total * 100).toFixed(0);
                     console.log(`Modelo FBX ${percentLoaded}% cargado`);
+                    if (percentLoaded < 100) {
+                        showMessage(`Cargando modelo FBX: ${percentLoaded}%`, false);
+                    }
                 },
-                // onError
                 function (error) {
-                    console.error("Error al cargar el modelo FBX:", error);
-                    showMessage(`Error al cargar modelo FBX: ${error.message || 'Ver consola'}`, true);
+                    // ... (código idéntico) ...
+                     console.error("Error al cargar el modelo FBX:", error);
+                    let errorMsg = `Error al cargar modelo FBX: ${modelUrl}. `;
+                    if (error.target && error.target.status === 0) {
+                        errorMsg += 'Posible error de CORS o red.';
+                    } else if (error.target && error.target.status === 404) {
+                        errorMsg += 'Error 404 (No encontrado). Verifica la URL.';
+                    } else {
+                        errorMsg += error.message ? error.message : '(Ver consola para detalles)';
+                    }
+                    showMessage(errorMsg, true);
+                     checkXRSupport();
                 }
             );
         }
 
-        // --- Manejadores de Eventos de Selección ---
-        function onSelectStart(event) {
-            const controller = event.target;
-            console.log("Evento: selectstart detectado");
-
-            if (grabbingController) return;
-            if (!loadedModel) return;
-
-            tempMatrix.identity().extractRotation(controller.matrixWorld);
-            raycaster.ray.origin.setFromMatrixPosition(controller.matrixWorld);
-            raycaster.ray.direction.set(0, 0, -1).applyMatrix4(tempMatrix);
-
-            const intersects = raycaster.intersectObject(loadedModel, true);
-            console.log("DEBUG: Intersecciones encontradas:", intersects.length);
-
-            if (intersects.length > 0) {
-                console.log("DEBUG: ¡Intersección con el modelo FBX!");
-                grabbedObject = loadedModel;
-                controller.attach(grabbedObject);
-                grabbingController = controller;
-                console.log("DEBUG: Modelo FBX agarrado.");
-                if (modelBoxHelper) modelBoxHelper.visible = false;
-            } else {
-                 console.log("DEBUG: No se encontró intersección con el modelo FBX.");
-            }
-        }
-
-        function onSelectEnd(event) {
-            const controller = event.target;
-            console.log("Evento: selectend detectado");
-
-            if (grabbingController === controller && grabbedObject) {
-                console.log("DEBUG: Soltando el modelo FBX.");
-                scene.attach(grabbedObject);
-                grabbedObject = null;
-                grabbingController = null;
-                if (modelBoxHelper) modelBoxHelper.visible = true;
-            }
-        }
-
-        // --- Redimensionar Ventana ---
-        function onWindowResize() {
-            if (renderer && camera && !renderer.xr.isPresenting) {
-                camera.aspect = window.innerWidth / window.innerHeight;
-                camera.updateProjectionMatrix();
-                renderer.setSize(window.innerWidth, window.innerHeight);
-                 console.log("Renderer redimensionado.");
-            }
-        }
-
-        // --- Bucle de Animación/Renderizado ---
-        function animate(timestamp, frame) {
-            if (modelBoxHelper && modelBoxHelper.visible) {
+        // --- Bucle de Renderizado ---
+        function renderLoop(timestamp, frame) {
+            // ... (código idéntico) ...
+            if (modelBoxHelper) {
                 modelBoxHelper.update();
             }
-            renderer.render(scene, camera);
+            if (renderer && scene && camera) {
+                 renderer.render(scene, camera);
+            }
         }
+
+        // --- Funciones WebXR (checkXRSupport, startXRSession, onSessionEnded, endXRSession) ---
+        // (Sin cambios)
+        async function checkXRSupport() { /* ... código idéntico ... */
+             console.log("--- Iniciando checkXRSupport ---");
+            const currentMsg = messageDiv.textContent;
+            const showCheckMsg = !currentMsg.includes('Error') && !currentMsg.includes('cargado');
+
+            if (showCheckMsg) {
+                 showMessage("Verificando compatibilidad WebXR...", false);
+            }
+
+            if (navigator.xr) {
+                console.log("navigator.xr existe.");
+                try {
+                    console.log("Intentando navigator.xr.isSessionSupported('immersive-ar')...");
+                    const supported = await navigator.xr.isSessionSupported('immersive-ar');
+                    console.log(`isSessionSupported('immersive-ar') devolvió: ${supported}`);
+                    if (supported) {
+                        xrButton.disabled = false;
+                        xrButton.textContent = 'Iniciar Realidad Mixta';
+                        xrButton.onclick = startXRSession;
+                         if (showCheckMsg) {
+                            showMessage("WebXR 'immersive-ar' compatible. ¡Listo!", false);
+                         }
+                    } else {
+                         if (!messageDiv.textContent.startsWith('Error al cargar')) {
+                            showMessage("El modo 'immersive-ar' no es compatible.", true);
+                         }
+                        xrButton.disabled = true;
+                        xrButton.textContent = "Modo AR no soportado";
+                    }
+                } catch (error) {
+                    console.error("Error dentro de isSessionSupported:", error);
+                    showMessage(`Error al comprobar compatibilidad: ${error.message}`, true);
+                    xrButton.disabled = true;
+                    xrButton.textContent = "Error de compatibilidad";
+                }
+            } else {
+                console.log("navigator.xr NO existe.");
+                showMessage("WebXR no es compatible con este navegador.", true);
+                xrButton.disabled = true;
+                xrButton.textContent = "WebXR no soportado";
+            }
+             console.log("--- Finalizando checkXRSupport ---");
+        }
+        async function startXRSession() { /* ... código idéntico ... */
+              console.log("Intentando iniciar sesión XR...");
+            showMessage("Iniciando sesión XR...", false);
+            xrButton.disabled = true;
+            xrButton.textContent = "Iniciando...";
+
+            if (!xrSession) {
+                try {
+                    console.log("Solicitando sesión 'immersive-ar'...");
+                    xrSession = await navigator.xr.requestSession('immersive-ar', {
+                         requiredFeatures: ['local-floor']
+                    });
+                    console.log("Sesión XR obtenida:", xrSession);
+
+                    console.log("Configurando capa base de WebGL...");
+                    await renderer.xr.setSession(xrSession);
+                    console.log("Sesión asignada al renderer XR.");
+
+                    console.log("Solicitando espacio de referencia 'local-floor'...");
+                    xrRefSpace = await xrSession.requestReferenceSpace('local-floor');
+                    console.log("Espacio de referencia 'local-floor' obtenido.");
+
+
+                    xrButton.textContent = 'Salir de Realidad Mixta';
+                    xrButton.onclick = endXRSession;
+                    xrButton.disabled = false;
+
+                    messageDiv.style.display = 'none';
+                     console.log("¡Sesión XR iniciada correctamente!");
+
+                    xrSession.addEventListener('end', onSessionEnded);
+
+                } catch (error) {
+                    console.error("Error al iniciar la sesión WebXR:", error);
+                    showMessage(`Error al iniciar la sesión: ${error.message}`, true);
+                    xrSession = null;
+                    xrButton.textContent = 'Iniciar Realidad Mixta';
+                    xrButton.onclick = startXRSession;
+                    checkXRSupport();
+                }
+            }
+        }
+        function onSessionEnded() { /* ... código idéntico ... */
+               console.log("Evento 'sessionended' recibido.");
+            if (xrSession) {
+                xrSession.removeEventListener('end', onSessionEnded);
+                xrSession = null;
+            }
+            if (renderer && renderer.xr) {
+                 renderer.xr.setSession(null);
+            }
+            xrButton.textContent = 'Iniciar Realidad Mixta';
+            xrButton.onclick = startXRSession;
+            checkXRSupport();
+            showMessage("Sesión de Realidad Mixta terminada.", false);
+             if (camera) {
+                camera.position.set(0, 1.6, 5.0); // Restaurar posición Z de cámara alejada
+                camera.lookAt(0, 1, 0);
+             }
+        }
+        async function endXRSession() { /* ... código idéntico ... */
+               console.log("Intentando terminar la sesión XR manualmente...");
+             xrButton.disabled = true;
+             xrButton.textContent = "Saliendo...";
+            if (xrSession) {
+                try {
+                    await xrSession.end();
+                    console.log("Llamada a xrSession.end() completada.");
+                } catch (error) {
+                    console.error("Error al terminar la sesión WebXR:", error);
+                    showMessage(`Error al salir de la sesión: ${error.message}`, true);
+                    onSessionEnded();
+                }
+            } else {
+                 console.warn("Se intentó llamar a endXRSession sin una sesión activa.");
+                 onSessionEnded();
+            }
+        }
+
 
         // --- Inicio de la Aplicación ---
         document.addEventListener('DOMContentLoaded', () => {
-              console.log("Evento DOMContentLoaded recibido.");
-             initThree();
-             window.addEventListener('resize', onWindowResize);
+            // ... (código idéntico) ...
+                console.log("Evento DOMContentLoaded recibido.");
+            showMessage("DOM cargado. Inicializando Three.js...", false);
+
+             if (typeof THREE === 'undefined') {
+                 console.error("¡Error Crítico! THREE no está definido.");
+                 showMessage("Error CRÍTICO: No se pudo cargar Three.js.", true);
+                 return;
+             }
+
+            initThree();
+
+            window.addEventListener('resize', () => {
+                 if (renderer && camera && !renderer.xr.isPresenting) {
+                     camera.aspect = window.innerWidth / window.innerHeight;
+                     camera.updateProjectionMatrix();
+                     renderer.setSize(window.innerWidth, window.innerHeight);
+                      console.log("Renderer redimensionado.");
+                 }
+            });
         });
 
-        console.log("Fin del script (módulo) principal.");
+        console.log("Fin del script principal.");
 
     </script>
 </body>
 </html>
+
