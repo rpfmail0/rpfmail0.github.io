@@ -2,7 +2,8 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no"> <title>WebXR - Actualización Three.js a 0.163.0</title> <script src="https://cdn.tailwindcss.com"></script>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>WebXR - Prueba RefSpace 'local'</title> <script src="https://cdn.tailwindcss.com"></script>
     <script type="importmap">
         {
             "imports": {
@@ -63,9 +64,8 @@
         // Importar componentes necesarios de Three.js
         import {
             Scene, PerspectiveCamera, WebGLRenderer, AmbientLight, DirectionalLight,
-            AxesHelper, Raycaster, Vector3, Matrix4, LineBasicMaterial, BufferGeometry, Line
+            AxesHelper // Quitar otros no usados por ahora
         } from 'three';
-        // FBXLoader y fflate no se importan ahora, ya que el modelo está comentado
 
         console.log("Script (módulo) iniciado.");
 
@@ -81,6 +81,7 @@
 
         // --- Función para mostrar mensajes ---
         function showMessage(msg, isError = false) {
+              // ... (código idéntico) ...
               if (messageDiv) {
                 messageDiv.textContent = msg;
                 messageDiv.style.color = isError ? '#FFCCCC' : 'white';
@@ -102,27 +103,27 @@
         // --- Inicializar Three.js y Configuración XR ---
         function initThree() {
              try {
-                console.log("Iniciando Three.js v0.163.0..."); // Indicar versión
+                console.log("Iniciando Three.js v0.163.0...");
                 showMessage("Iniciando Three.js...", false);
-                scene = new Scene(); // Usar Scene importado
+                scene = new Scene();
 
-                const axesHelper = new AxesHelper( 2 ); // Usar AxesHelper importado
+                const axesHelper = new AxesHelper( 2 );
                 scene.add( axesHelper );
 
-                camera = new PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000); // Usar PerspectiveCamera importado
+                camera = new PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
                 camera.position.set(0, 1.6, 5.0);
                 camera.lookAt(0, 1, 0);
 
-                renderer = new WebGLRenderer({ antialias: true, alpha: true }); // Usar WebGLRenderer importado
+                renderer = new WebGLRenderer({ antialias: true, alpha: true });
                 renderer.setSize(window.innerWidth, window.innerHeight);
                 renderer.setPixelRatio(window.devicePixelRatio);
                 renderer.xr.enabled = true;
                 document.body.appendChild(renderer.domElement);
                 console.log("Renderer añadido al DOM.");
 
-                const ambientLight = new AmbientLight(0xffffff, 0.8); // Usar AmbientLight importado
+                const ambientLight = new AmbientLight(0xffffff, 0.8);
                 scene.add(ambientLight);
-                const directionalLight = new DirectionalLight(0xffffff, 0.5); // Usar DirectionalLight importado
+                const directionalLight = new DirectionalLight(0xffffff, 0.5);
                 directionalLight.position.set(1, 2, 1).normalize();
                 scene.add(directionalLight);
 
@@ -132,7 +133,6 @@
                 showMessage("Modelo omitido (debug). Escena lista.", false);
                 checkXRSupport();
 
-                // Usar setAnimationLoop del renderer
                 renderer.setAnimationLoop(renderLoop);
                 console.log("Bucle de animación iniciado.");
                 return true;
@@ -153,13 +153,10 @@
             controller1 = renderer.xr.getController(1);
             scene.add(controller1);
             console.log("Mandos configurados (mínimo).");
-            // Visualización y listeners comentados por ahora
         }
 
         // --- Bucle de Renderizado ---
         function renderLoop(timestamp, frame) {
-            // 'frame' es proporcionado por WebXR cuando está en sesión
-            // No necesitamos hacer nada explícito aquí para la escena mínima
             if (renderer && scene && camera) {
                  renderer.render(scene, camera);
             }
@@ -167,6 +164,7 @@
 
         // --- Funciones WebXR ---
         async function checkXRSupport() {
+              // ... (código idéntico) ...
               console.log("--- Iniciando checkXRSupport ---");
             const currentMsg = messageDiv.textContent;
             const showCheckMsg = !currentMsg.includes('Error') && !currentMsg.includes('Modelo omitido');
@@ -179,7 +177,6 @@
                 console.log("navigator.xr existe.");
                 try {
                     console.log("Intentando navigator.xr.isSessionSupported('immersive-ar')...");
-                    // Usar await directamente aquí
                     const supported = await navigator.xr.isSessionSupported('immersive-ar');
                     console.log(`isSessionSupported('immersive-ar') devolvió: ${supported}`);
                     if (supported) {
@@ -217,21 +214,23 @@
 
             if (!xrSession) {
                 try {
-                    // Usando sesión simple sin features y espacio 'viewer'
+                    // Paso 1: Solicitar sesión SIN features requeridas
                     console.log("Paso 1: Solicitando navigator.xr.requestSession('immersive-ar')... (sin features)");
                     xrSession = await navigator.xr.requestSession('immersive-ar');
                     console.log("Paso 1: ¡Sesión XR obtenida!", xrSession);
 
+                    // Paso 2: Configurar capa WebGL
                     console.log("Paso 2: Configurando renderer.xr.setSession...");
-                    // Usar await directamente
                     await renderer.xr.setSession(xrSession);
                     console.log("Paso 2: ¡Sesión asignada al renderer XR!");
 
-                    console.log("Paso 3: Solicitando xrSession.requestReferenceSpace('viewer')...");
-                    // Usar await directamente
-                    xrRefSpace = await xrSession.requestReferenceSpace('viewer');
-                    console.log("Paso 3: ¡Espacio de referencia 'viewer' obtenido!");
+                    // Paso 3: Solicitar espacio de referencia 'local'
+                    console.log("Paso 3: Solicitando xrSession.requestReferenceSpace('local')..."); // <-- CAMBIADO a 'local'
+                    xrRefSpace = await xrSession.requestReferenceSpace('local'); // <-- CAMBIADO a 'local'
+                    console.log("Paso 3: ¡Espacio de referencia 'local' obtenido!"); // <-- Log actualizado
 
+
+                    // Configuración final si todo va bien
                     xrButton.textContent = 'Salir de Realidad Mixta';
                     xrButton.onclick = endXRSession;
                     xrButton.disabled = false;
@@ -242,7 +241,8 @@
 
                 } catch (error) {
                     console.error("--- ERROR durante startXRSession ---:", error);
-                    showMessage(`Error al iniciar la sesión: ${error.message}`, true);
+                    // Mostrar el tipo de espacio que falló
+                    showMessage(`Error al iniciar la sesión (probando RefSpace 'local'): ${error.message}`, true);
                     if (xrSession) {
                         try { await xrSession.end(); } catch (e) { console.error("Error al intentar terminar sesión fallida:", e); }
                         xrSession = null;
@@ -257,13 +257,12 @@
         }
 
         function onSessionEnded() {
-              console.log("Evento 'sessionended' recibido.");
+              // ... (código idéntico) ...
+               console.log("Evento 'sessionended' recibido.");
             if (xrSession) {
                 xrSession.removeEventListener('end', onSessionEnded);
                 xrSession = null;
             }
-            // En v0.163.0, setSession(null) puede no ser necesario explícitamente,
-            // pero no hace daño dejarlo por ahora.
             if (renderer && renderer.xr) {
                  renderer.xr.setSession(null).catch((err) => {
                      console.warn("Advertencia al intentar setSession(null):", err);
@@ -280,36 +279,32 @@
         }
 
         async function endXRSession() {
-               console.log("Intentando terminar la sesión XR manually...");
+               // ... (código idéntico) ...
+                console.log("Intentando terminar la sesión XR manually...");
              xrButton.disabled = true;
              xrButton.textContent = "Saliendo...";
             if (xrSession) {
                 try {
-                    // En versiones recientes, end() es síncrono a menudo, pero await no hace daño
                     await xrSession.end();
                     console.log("Llamada a xrSession.end() completada.");
-                    // El evento 'end' (onSessionEnded) debería encargarse del resto
                 } catch (error) {
                     console.error("Error al terminar la sesión WebXR:", error);
                     showMessage(`Error al salir de la sesión: ${error.message}`, true);
-                    onSessionEnded(); // Forzar limpieza
+                    onSessionEnded();
                 }
             } else {
                  console.warn("Se intentó llamar a endXRSession sin una sesión activa.");
-                 onSessionEnded(); // Restaurar estado
+                 onSessionEnded();
             }
         }
 
 
         // --- Inicio de la Aplicación ---
-        // No necesitamos DOMContentLoaded con type="module" si el script está al final,
-        // pero lo dejamos por claridad y consistencia con versiones anteriores.
         document.addEventListener('DOMContentLoaded', () => {
-              console.log("Evento DOMContentLoaded recibido.");
-             // Llamar a initThree directamente
+              // ... (código idéntico) ...
+               console.log("Evento DOMContentLoaded recibido.");
              initThree();
 
-             // Listener de redimensionado
              window.addEventListener('resize', () => {
                  if (renderer && camera && !renderer.xr.isPresenting) {
                      camera.aspect = window.innerWidth / window.innerHeight;
