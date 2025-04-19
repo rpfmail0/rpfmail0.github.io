@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>WebXR con Modelo 3D (FBX)</title>
+    <title>WebXR con Modelo 3D (FBX) - Debug</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/libs/fflate.min.js"></script>
@@ -63,6 +63,7 @@
         let xrSession = null;
         let xrRefSpace = null;
         let loadedModel = null;
+        let modelBoxHelper = null; // Referencia al BoxHelper
 
         const xrButton = document.getElementById('xr-button');
         const messageDiv = document.getElementById('message');
@@ -95,6 +96,10 @@
                 console.log("Iniciando Three.js...");
                 showMessage("Iniciando Three.js...", false);
                 scene = new THREE.Scene();
+
+                // Añadir ejes para ayudar a la orientación
+                const axesHelper = new THREE.AxesHelper( 2 ); // Longitud de los ejes: 2 unidades
+                scene.add( axesHelper );
 
                 camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
                 camera.position.set(0, 1.6, 1.0);
@@ -139,15 +144,7 @@
             }
 
             const loader = new THREE.FBXLoader();
-
-            // --- ¡¡¡ IMPORTANTE: URL DEL MODELO !!! ---
-            // El modelo FBX DEBE estar alojado en el MISMO DOMINIO que esta página HTML
-            // (p.ej., en el mismo repositorio de GitHub Pages) para evitar errores CORS.
-            // O en un servidor que configure correctamente las cabeceras CORS.
-            // ¡NO uses URLs directas a github.com, gitlab.com, etc.!
-            // RECOMENDACIÓN: Sube el archivo FBX a tu repo y usa una URL relativa.
-            //               Evita espacios y caracteres especiales en el nombre del archivo.
-            const modelUrl = 'planta_interior_2.fbx'; // <-- CAMBIA ESTO por el nombre (o ruta relativa) de tu archivo FBX en tu repo.
+            const modelUrl = 'planta_interior_2.fbx'; // <-- Nombre del archivo FBX en tu repo
 
             console.log(`Intentando cargar modelo FBX desde: ${modelUrl}`);
             showMessage(`Cargando modelo FBX: ${modelUrl}...`, false);
@@ -159,10 +156,10 @@
                     loadedModel = object;
 
                     // --- Ajustes del modelo (¡IMPORTANTE!) ---
-                    // Ajusta escala, posición y rotación según sea necesario para tu modelo.
-                    loadedModel.scale.set(0.01, 0.01, 0.01); // Ejemplo: Escalar (¡ajusta!)
-                    loadedModel.position.set(0, 0, -1.5);     // Ejemplo: Posición (Y=0 es el suelo con 'local-floor')
-                    // loadedModel.rotation.x = -Math.PI / 2; // Ejemplo: Rotación si es necesario
+                    // EXPERIMENTA con estos valores si el modelo no se ve o es muy pequeño/grande
+                    loadedModel.scale.set(0.1, 0.1, 0.1);   // Prueba inicial (era 0.01) - ¡AJUSTA SEGÚN NECESITES! (prueba 1, 0.5, 0.05 etc.)
+                    loadedModel.position.set(0, 1.0, -1.5); // Posición inicial (Y=1.0 para estar a la altura de la vista)
+                    // loadedModel.rotation.x = -Math.PI / 2; // Rotación si es necesario
 
                     loadedModel.traverse(function (child) {
                          if (child.isMesh) {
@@ -173,12 +170,19 @@
 
                     scene.add(loadedModel);
                     console.log("Modelo FBX añadido a la escena.");
-                    showMessage("Modelo FBX cargado. Escena lista.", false);
 
-                    // Ahora que el modelo cargó (o falló), verificar WebXR
-                    checkXRSupport();
+                    // --- Añadir BoxHelper para depuración ---
+                    // Esto dibujará una caja alrededor del modelo, útil si el modelo no es visible
+                    modelBoxHelper = new THREE.BoxHelper( loadedModel, 0xffff00 ); // Caja amarilla
+                    scene.add( modelBoxHelper );
+                    console.log("BoxHelper añadido para el modelo.");
+                    // ----------------------------------------
+
+                    showMessage("Modelo FBX cargado. Escena lista.", false);
+                    checkXRSupport(); // Verificar WebXR después de cargar
                 },
                 function (xhr) {
+                    // ... (código idéntico) ...
                     const percentLoaded = (xhr.loaded / xhr.total * 100).toFixed(0);
                     console.log(`Modelo FBX ${percentLoaded}% cargado`);
                     if (percentLoaded < 100) {
@@ -186,41 +190,52 @@
                     }
                 },
                 function (error) {
+                     // ... (código idéntico) ...
                     console.error("Error al cargar el modelo FBX:", error);
-                    // Mostrar un error más descriptivo si es posible
                     let errorMsg = `Error al cargar modelo FBX: ${modelUrl}. `;
                     if (error.target && error.target.status === 0) {
-                        errorMsg += 'Posible error de CORS o red. Asegúrate de que el modelo está en el mismo dominio o el servidor permite el acceso.';
+                        errorMsg += 'Posible error de CORS o red.';
                     } else if (error.target && error.target.status === 404) {
                         errorMsg += 'Error 404 (No encontrado). Verifica la URL.';
                     } else {
                         errorMsg += error.message ? error.message : '(Ver consola para detalles)';
                     }
                     showMessage(errorMsg, true);
-                    // Aún así, intentar verificar WebXR
-                     checkXRSupport();
+                     checkXRSupport(); // Verificar WebXR igualmente
                 }
             );
         }
 
         // --- Bucle de Renderizado ---
         function renderLoop(timestamp, frame) {
-            // ... (código idéntico) ...
-            if (loadedModel) {
-                 // loadedModel.rotation.y += 0.005;
+            // Actualizar el BoxHelper si el modelo se mueve/anima (opcional)
+            if (modelBoxHelper) {
+                modelBoxHelper.update();
             }
+
+            // Rotar modelo (opcional, descomentar para probar)
+            // if (loadedModel) {
+            //      loadedModel.rotation.y += 0.005;
+            // }
+
+            // Renderizar la escena
             if (renderer && scene && camera) {
                  renderer.render(scene, camera);
             }
         }
 
         // --- Funciones WebXR (checkXRSupport, startXRSession, onSessionEnded, endXRSession) ---
-        // (Sin cambios)
-        async function checkXRSupport() { /* ... código idéntico ... */
+        // (Sin cambios, excepto que checkXRSupport ahora debería detectar soporte)
+        async function checkXRSupport() {
             console.log("--- Iniciando checkXRSupport ---");
-            if (messageDiv.style.display === 'none' || messageDiv.textContent.startsWith('Cargando modelo')) {
+            // No mostrar mensaje si ya hay uno importante (carga, error)
+            const currentMsg = messageDiv.textContent;
+            const showCheckMsg = !currentMsg.includes('Error') && !currentMsg.includes('cargado');
+
+            if (showCheckMsg) {
                  showMessage("Verificando compatibilidad WebXR...", false);
             }
+
             if (navigator.xr) {
                 console.log("navigator.xr existe.");
                 try {
@@ -231,7 +246,7 @@
                         xrButton.disabled = false;
                         xrButton.textContent = 'Iniciar Realidad Mixta';
                         xrButton.onclick = startXRSession;
-                         if (messageDiv.style.display === 'none' || messageDiv.textContent.startsWith('Verificando')) {
+                         if (showCheckMsg) { // Mostrar mensaje de éxito solo si no había otro
                             showMessage("WebXR 'immersive-ar' compatible. ¡Listo!", false);
                          }
                     } else {
@@ -257,7 +272,7 @@
              console.log("--- Finalizando checkXRSupport ---");
         }
         async function startXRSession() { /* ... código idéntico ... */
-            console.log("Intentando iniciar sesión XR...");
+             console.log("Intentando iniciar sesión XR...");
             showMessage("Iniciando sesión XR...", false);
             xrButton.disabled = true;
             xrButton.textContent = "Iniciando...";
@@ -297,7 +312,7 @@
                     checkXRSupport();
                 }
             }
-         }
+        }
         function onSessionEnded() { /* ... código idéntico ... */
             console.log("Evento 'sessionended' recibido.");
             if (xrSession) {
@@ -335,10 +350,11 @@
             }
         }
 
+
         // --- Inicio de la Aplicación ---
         document.addEventListener('DOMContentLoaded', () => {
             // ... (código idéntico) ...
-            console.log("Evento DOMContentLoaded recibido.");
+             console.log("Evento DOMContentLoaded recibido.");
             showMessage("DOM cargado. Inicializando Three.js...", false);
 
              if (typeof THREE === 'undefined') {
@@ -364,6 +380,7 @@
     </script>
 </body>
 </html>
+
 
 
 
