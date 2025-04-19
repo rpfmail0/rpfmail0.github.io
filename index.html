@@ -2,9 +2,15 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>WebXR con Modelo 3D (FBX) - Debug Error Update</title> <script src="https://cdn.tailwindcss.com"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no"> <title>WebXR - Actualización Three.js a 0.163.0</title> <script src="https://cdn.tailwindcss.com"></script>
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "https://cdn.jsdelivr.net/npm/three@0.163.0/build/three.module.js",
+                "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.163.0/examples/jsm/"
+            }
+        }
+    </script>
     <style>
         /* ... (Estilos CSS idénticos) ... */
          body { margin: 0; overflow: hidden; font-family: 'Inter', sans-serif; }
@@ -53,29 +59,29 @@
     <div id="message">Cargando escena...</div>
     <button id="xr-button" disabled>Verificando compatibilidad...</button>
 
-    <script>
-        console.log("Script iniciado.");
+    <script type="module">
+        // Importar componentes necesarios de Three.js
+        import {
+            Scene, PerspectiveCamera, WebGLRenderer, AmbientLight, DirectionalLight,
+            AxesHelper, Raycaster, Vector3, Matrix4, LineBasicMaterial, BufferGeometry, Line
+        } from 'three';
+        // FBXLoader y fflate no se importan ahora, ya que el modelo está comentado
+
+        console.log("Script (módulo) iniciado.");
+
         // Variables globales
         let scene, camera, renderer;
         let xrSession = null;
         let xrRefSpace = null;
-        // Modelo y helpers no se usarán en esta versión
-        // let loadedModel = null;
-        // let modelBoxHelper = null;
+        let controller1;
 
-        // Variables para Interacción con Mandos
-        let controller1; // Mando derecho
-        // Raycaster y intersectedObject no se usan ahora
-        // let raycaster;
-        // let intersectedObject = null;
-
+        // Elementos del DOM
         const xrButton = document.getElementById('xr-button');
         const messageDiv = document.getElementById('message');
 
         // --- Función para mostrar mensajes ---
         function showMessage(msg, isError = false) {
-             // ... (código idéntico) ...
-             if (messageDiv) {
+              if (messageDiv) {
                 messageDiv.textContent = msg;
                 messageDiv.style.color = isError ? '#FFCCCC' : 'white';
                 messageDiv.style.backgroundColor = isError ? 'rgba(150, 0, 0, 0.8)' : 'rgba(0, 0, 0, 0.7)';
@@ -96,38 +102,37 @@
         // --- Inicializar Three.js y Configuración XR ---
         function initThree() {
              try {
-                console.log("Iniciando Three.js...");
+                console.log("Iniciando Three.js v0.163.0..."); // Indicar versión
                 showMessage("Iniciando Three.js...", false);
-                scene = new THREE.Scene();
+                scene = new Scene(); // Usar Scene importado
 
-                const axesHelper = new THREE.AxesHelper( 2 );
+                const axesHelper = new AxesHelper( 2 ); // Usar AxesHelper importado
                 scene.add( axesHelper );
 
-                camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+                camera = new PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000); // Usar PerspectiveCamera importado
                 camera.position.set(0, 1.6, 5.0);
                 camera.lookAt(0, 1, 0);
 
-                renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+                renderer = new WebGLRenderer({ antialias: true, alpha: true }); // Usar WebGLRenderer importado
                 renderer.setSize(window.innerWidth, window.innerHeight);
                 renderer.setPixelRatio(window.devicePixelRatio);
                 renderer.xr.enabled = true;
                 document.body.appendChild(renderer.domElement);
                 console.log("Renderer añadido al DOM.");
 
-                const ambientLight = new THREE.AmbientLight(0xffffff, 0.8);
+                const ambientLight = new AmbientLight(0xffffff, 0.8); // Usar AmbientLight importado
                 scene.add(ambientLight);
-                const directionalLight = new THREE.DirectionalLight(0xffffff, 0.5);
+                const directionalLight = new DirectionalLight(0xffffff, 0.5); // Usar DirectionalLight importado
                 directionalLight.position.set(1, 2, 1).normalize();
                 scene.add(directionalLight);
 
-                // Configurar solo el objeto base del mando
                 setupControllersMinimal();
 
-                // Carga de modelo comentada
                 console.log("Carga de modelo FBX OMITIDA para depuración.");
                 showMessage("Modelo omitido (debug). Escena lista.", false);
                 checkXRSupport();
 
+                // Usar setAnimationLoop del renderer
                 renderer.setAnimationLoop(renderLoop);
                 console.log("Bucle de animación iniciado.");
                 return true;
@@ -145,34 +150,16 @@
 
         // --- Configuración de Mandos Mínima ---
         function setupControllersMinimal() {
-            // Mando Derecho (índice 1)
             controller1 = renderer.xr.getController(1);
-            scene.add(controller1); // Añadir solo el objeto base del mando
-
-            // --- Listeners y visualización comentados ---
-            // controller1.addEventListener('selectstart', onSelectStart);
-            // controller1.addEventListener('selectend', onSelectEnd);
-            // const controllerMaterial = new THREE.LineBasicMaterial(...);
-            // const controllerGeometry = new THREE.BufferGeometry()...;
-            // const controllerLine = new THREE.Line(...);
-            // controller1.add(controllerLine);
-            // raycaster = new THREE.Raycaster();
-            // -------------------------------------------
-
+            scene.add(controller1);
             console.log("Mandos configurados (mínimo).");
+            // Visualización y listeners comentados por ahora
         }
-
-        // --- Función para Cargar el Modelo FBX (No se llama) ---
-        // function loadFBXModel() { ... }
-
-        // --- Manejadores de Eventos de Selección del Mando (No se usan) ---
-        // function onSelectStart(event) { ... }
-        // function onSelectEnd(event) { ... }
-
 
         // --- Bucle de Renderizado ---
         function renderLoop(timestamp, frame) {
-            // No hay nada que actualizar explícitamente aquí en esta versión
+            // 'frame' es proporcionado por WebXR cuando está en sesión
+            // No necesitamos hacer nada explícito aquí para la escena mínima
             if (renderer && scene && camera) {
                  renderer.render(scene, camera);
             }
@@ -180,7 +167,6 @@
 
         // --- Funciones WebXR ---
         async function checkXRSupport() {
-             // ... (código idéntico) ...
               console.log("--- Iniciando checkXRSupport ---");
             const currentMsg = messageDiv.textContent;
             const showCheckMsg = !currentMsg.includes('Error') && !currentMsg.includes('Modelo omitido');
@@ -193,6 +179,7 @@
                 console.log("navigator.xr existe.");
                 try {
                     console.log("Intentando navigator.xr.isSessionSupported('immersive-ar')...");
+                    // Usar await directamente aquí
                     const supported = await navigator.xr.isSessionSupported('immersive-ar');
                     console.log(`isSessionSupported('immersive-ar') devolvió: ${supported}`);
                     if (supported) {
@@ -223,7 +210,6 @@
         }
 
         async function startXRSession() {
-            // ... (código idéntico con logs de Paso 1, 2, 3) ...
              console.log("--- Iniciando startXRSession ---");
             showMessage("Iniciando sesión XR...", false);
             xrButton.disabled = true;
@@ -231,20 +217,20 @@
 
             if (!xrSession) {
                 try {
-                    console.log("Paso 1: Solicitando navigator.xr.requestSession('immersive-ar')...");
-                    xrSession = await navigator.xr.requestSession('immersive-ar', {
-                         requiredFeatures: ['local-floor']
-                    });
+                    // Usando sesión simple sin features y espacio 'viewer'
+                    console.log("Paso 1: Solicitando navigator.xr.requestSession('immersive-ar')... (sin features)");
+                    xrSession = await navigator.xr.requestSession('immersive-ar');
                     console.log("Paso 1: ¡Sesión XR obtenida!", xrSession);
 
                     console.log("Paso 2: Configurando renderer.xr.setSession...");
+                    // Usar await directamente
                     await renderer.xr.setSession(xrSession);
                     console.log("Paso 2: ¡Sesión asignada al renderer XR!");
 
-                    console.log("Paso 3: Solicitando xrSession.requestReferenceSpace('local-floor')...");
-                    xrRefSpace = await xrSession.requestReferenceSpace('local-floor');
-                    console.log("Paso 3: ¡Espacio de referencia 'local-floor' obtenido!");
-
+                    console.log("Paso 3: Solicitando xrSession.requestReferenceSpace('viewer')...");
+                    // Usar await directamente
+                    xrRefSpace = await xrSession.requestReferenceSpace('viewer');
+                    console.log("Paso 3: ¡Espacio de referencia 'viewer' obtenido!");
 
                     xrButton.textContent = 'Salir de Realidad Mixta';
                     xrButton.onclick = endXRSession;
@@ -271,14 +257,17 @@
         }
 
         function onSessionEnded() {
-             // ... (código idéntico) ...
               console.log("Evento 'sessionended' recibido.");
             if (xrSession) {
                 xrSession.removeEventListener('end', onSessionEnded);
                 xrSession = null;
             }
+            // En v0.163.0, setSession(null) puede no ser necesario explícitamente,
+            // pero no hace daño dejarlo por ahora.
             if (renderer && renderer.xr) {
-                 renderer.xr.setSession(null);
+                 renderer.xr.setSession(null).catch((err) => {
+                     console.warn("Advertencia al intentar setSession(null):", err);
+                 });
             }
             xrButton.textContent = 'Iniciar Realidad Mixta';
             xrButton.onclick = startXRSession;
@@ -291,41 +280,37 @@
         }
 
         async function endXRSession() {
-             // ... (código idéntico) ...
-               console.log("Intentando terminar la sesión XR manualmente...");
+               console.log("Intentando terminar la sesión XR manually...");
              xrButton.disabled = true;
              xrButton.textContent = "Saliendo...";
             if (xrSession) {
                 try {
+                    // En versiones recientes, end() es síncrono a menudo, pero await no hace daño
                     await xrSession.end();
                     console.log("Llamada a xrSession.end() completada.");
+                    // El evento 'end' (onSessionEnded) debería encargarse del resto
                 } catch (error) {
                     console.error("Error al terminar la sesión WebXR:", error);
                     showMessage(`Error al salir de la sesión: ${error.message}`, true);
-                    onSessionEnded();
+                    onSessionEnded(); // Forzar limpieza
                 }
             } else {
                  console.warn("Se intentó llamar a endXRSession sin una sesión activa.");
-                 onSessionEnded();
+                 onSessionEnded(); // Restaurar estado
             }
         }
 
 
         // --- Inicio de la Aplicación ---
+        // No necesitamos DOMContentLoaded con type="module" si el script está al final,
+        // pero lo dejamos por claridad y consistencia con versiones anteriores.
         document.addEventListener('DOMContentLoaded', () => {
-            // ... (código idéntico) ...
-             console.log("Evento DOMContentLoaded recibido.");
-            showMessage("DOM cargado. Inicializando Three.js...", false);
+              console.log("Evento DOMContentLoaded recibido.");
+             // Llamar a initThree directamente
+             initThree();
 
-             if (typeof THREE === 'undefined') {
-                 console.error("¡Error Crítico! THREE no está definido.");
-                 showMessage("Error CRÍTICO: No se pudo cargar Three.js.", true);
-                 return;
-             }
-
-            initThree();
-
-            window.addEventListener('resize', () => {
+             // Listener de redimensionado
+             window.addEventListener('resize', () => {
                  if (renderer && camera && !renderer.xr.isPresenting) {
                      camera.aspect = window.innerWidth / window.innerHeight;
                      camera.updateProjectionMatrix();
@@ -335,10 +320,11 @@
             });
         });
 
-        console.log("Fin del script principal.");
+        console.log("Fin del script (módulo) principal.");
 
     </script>
 </body>
 </html>
+
 
 
