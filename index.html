@@ -3,19 +3,19 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>WebXR - Usando ARButton</title> <script type="importmap">
+    <title>WebXR - Modelo FBX e Interacción con ARButton</title> <script type="importmap">
         {
             "imports": {
                 "three": "https://cdn.jsdelivr.net/npm/three@0.163.0/build/three.module.js",
-                "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.163.0/examples/jsm/"
+                "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.163.0/examples/jsm/",
+                "fflate": "https://unpkg.com/fflate@0.8.1/esm/index.js" /* Añadido para FBXLoader */
             }
         }
     </script>
     <style>
         body { margin: 0; overflow: hidden; font-family: sans-serif; }
         canvas { display: block; }
-        /* ARButton crea su propio estilo, pero podemos añadir algo si queremos */
-        #ARButton { /* ID por defecto que usa ARButton */
+        #ARButton { /* Estilo para el botón de ARButton */
              position: absolute;
              bottom: 20px;
              right: 20px;
@@ -39,28 +39,35 @@
 </head>
 <body class="bg-gray-100">
     <script type="module">
-        // Importar componentes necesarios de Three.js
+        // Importaciones Principales
         import {
             Scene, PerspectiveCamera, WebGLRenderer, AmbientLight, DirectionalLight,
-            AxesHelper
+            AxesHelper, Raycaster, Vector3, Matrix4, LineBasicMaterial, BufferGeometry, Line,
+            BoxHelper // Importar BoxHelper
         } from 'three';
         // Importar ARButton
         import { ARButton } from 'three/addons/webxr/ARButton.js';
+        // Importar FBXLoader y dependencia fflate
+        import { FBXLoader } from 'three/addons/loaders/FBXLoader.js';
+        import * as fflate from 'fflate'; // Necesario para FBXLoader
 
         console.log("Script (módulo) iniciado.");
 
         // Variables globales
         let scene, camera, renderer;
         let controller1; // Mando derecho
+        let raycaster;
+        let tempMatrix = new THREE.Matrix4();
+        let grabbingController = null; // Qué mando está agarrando (si tuviéramos 2)
+        let grabbedObject = null; // Qué objeto está agarrado
+        let loadedModel = null; // Referencia al modelo FBX cargado
+        let modelBoxHelper = null; // Ayudante visual
 
-        // Ya no necesitamos: xrSession, xrRefSpace, xrButton, messageDiv
-
-        // --- Función para mostrar mensajes (la dejamos por si acaso para errores futuros) ---
+        // --- Función para mostrar mensajes (simple alerta para errores) ---
         function showMessage(msg, isError = false) {
-              console.log(`Mensaje UI (simulado): ${msg}`, isError ? "(ERROR)" : "");
-              // Podríamos crear un div temporal si fuera necesario mostrar errores
+              console.log(`Mensaje: ${msg}`, isError ? "(ERROR)" : "");
               if(isError) {
-                  alert("Error: " + msg); // Simple alerta para errores críticos
+                  alert("Error: " + msg);
               }
         }
 
@@ -68,34 +75,26 @@
         function initThree() {
              try {
                 console.log("Iniciando Three.js v0.163.0...");
-                //showMessage("Iniciando Three.js...", false); // ARButton da feedback
                 scene = new Scene();
 
                 const axesHelper = new AxesHelper( 2 );
                 scene.add( axesHelper );
 
                 camera = new PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
-                // La posición inicial de la cámara es menos relevante con ARButton/WebXR
-                // camera.position.set(0, 1.6, 5.0);
-                // camera.lookAt(0, 1, 0);
 
                 renderer = new WebGLRenderer({ antialias: true, alpha: true });
                 renderer.setSize(window.innerWidth, window.innerHeight);
                 renderer.setPixelRatio(window.devicePixelRatio);
-                renderer.xr.enabled = true; // Habilitar WebXR ANTES de crear ARButton
+                renderer.xr.enabled = true;
                 document.body.appendChild(renderer.domElement);
                 console.log("Renderer añadido al DOM.");
 
                 // --- Crear y añadir ARButton ---
-                // ARButton se encarga de verificar compatibilidad y manejar sesiones
-                // Podemos pasarle opciones de sesión si queremos
                 const button = ARButton.createButton(renderer, {
-                     requiredFeatures: ['local-floor'] // Intentar pedir 'local-floor'
-                     // Opciones adicionales como 'domOverlay' podrían ir aquí
+                     requiredFeatures: ['local-floor']
                 });
-                document.body.appendChild(button); // Añadir el botón creado al DOM
+                document.body.appendChild(button);
                 console.log("ARButton añadido.");
-                // Ya no llamamos a checkXRSupport manualmente
 
                 // --- Luces ---
                 const ambientLight = new AmbientLight(0xffffff, 0.8);
@@ -104,12 +103,11 @@
                 directionalLight.position.set(1, 2, 1).normalize();
                 scene.add(directionalLight);
 
-                // --- Configurar Mandos (Mínimo) ---
-                setupControllersMinimal();
+                // --- Configurar Mandos (con listeners y visualización) ---
+                setupControllers(); // Usar la función completa ahora
 
-                // --- Carga de Modelo Comentada ---
-                console.log("Carga de modelo FBX OMITIDA para depuración.");
-                // showMessage("Modelo omitido (debug). Escena lista.", false);
+                // --- Cargar Modelo FBX ---
+                loadFBXModel(); // Activar carga del modelo
 
                 // Iniciar bucle de renderizado
                 renderer.setAnimationLoop(renderLoop);
@@ -123,45 +121,150 @@
             }
         }
 
-        // --- Configuración de Mandos Mínima ---
-        function setupControllersMinimal() {
-            // Mando Derecho (índice 1)
-            // Es importante obtenerlo aquí para que esté disponible
+         // --- Configuración de Mandos (Completa) ---
+         function setupControllers() {
+            // Mando Derecho (index 1)
             controller1 = renderer.xr.getController(1);
+            controller1.addEventListener('selectstart', onSelectStart);
+            controller1.addEventListener('selectend', onSelectEnd);
             scene.add(controller1);
-            console.log("Mandos configurados (mínimo).");
-            // Listeners y visualización se añadirán después si esto funciona
+            console.log("Mando 1 (Der) añadido y listeners configurados.");
+
+            // Añadir visualización básica al mando derecho
+            const controllerMaterial = new THREE.LineBasicMaterial({ color: 0xffffff, linewidth: 2 });
+            const controllerGeometry = new THREE.BufferGeometry().setFromPoints([
+                new Vector3(0, 0, 0),
+                new Vector3(0, 0, -0.5) // Línea de 50cm
+            ]);
+
+            const line1 = new Line(controllerGeometry, controllerMaterial);
+            controller1.add(line1);
+            console.log("Visualización añadida al mando 1.");
+
+            // Configurar Raycaster
+            raycaster = new Raycaster();
+            console.log("Raycaster configurado.");
         }
 
-        // --- Bucle de Renderizado ---
-        function renderLoop(timestamp, frame) {
-            // frame es proporcionado por WebXR cuando está en sesión
-            // Podemos usarlo para lógica más avanzada si es necesario
+        // --- Cargar Modelo FBX ---
+        function loadFBXModel() {
+            const loader = new FBXLoader();
+            // FBXLoader en versiones recientes puede necesitar que se le pase fflate
+            // aunque a menudo lo detecta globalmente si se importó. Por si acaso:
+            // loader.setDecompressor(fflate); // Descomentar si hay problemas de descompresión
 
-            // Renderizar la escena
-            if (renderer && scene && camera) {
-                 renderer.render(scene, camera);
+            const modelUrl = 'planta_interior_2.fbx';
+            console.log(`Intentando cargar modelo FBX desde: ${modelUrl}`);
+
+            loader.load(
+                modelUrl,
+                // onLoad
+                function (object) {
+                    console.log("Modelo FBX cargado correctamente:", object);
+                    loadedModel = object;
+
+                    loadedModel.scale.set(0.001, 0.001, 0.001); // Escala ajustada
+                    loadedModel.position.set(0, 1.0, -1.5); // Posición ajustada
+
+                     loadedModel.traverse(function (child) {
+                         if (child.isMesh) {
+                             child.castShadow = true;
+                             child.receiveShadow = true;
+                         }
+                     });
+
+                    scene.add(loadedModel);
+                    console.log("Modelo FBX añadido a la escena.");
+
+                    // Añadir BoxHelper
+                    if (modelBoxHelper) scene.remove(modelBoxHelper);
+                    modelBoxHelper = new BoxHelper( loadedModel, 0xffff00 ); // Amarillo
+                    scene.add( modelBoxHelper );
+                    console.log("BoxHelper añadido/actualizado para el modelo.");
+                },
+                // onProgress
+                function (xhr) {
+                    const percentLoaded = (xhr.loaded / xhr.total * 100).toFixed(0);
+                    console.log(`Modelo FBX ${percentLoaded}% cargado`);
+                },
+                // onError
+                function (error) {
+                    console.error("Error al cargar el modelo FBX:", error);
+                    showMessage(`Error al cargar modelo FBX: ${error.message || 'Ver consola'}`, true);
+                }
+            );
+        }
+
+        // --- Manejadores de Eventos de Selección ---
+        function onSelectStart(event) {
+            const controller = event.target; // Mando que disparó (asumimos controller1)
+            console.log("Evento: selectstart detectado");
+
+            if (grabbingController) return; // Ya está agarrando algo
+            if (!loadedModel) return; // Modelo no cargado
+
+            tempMatrix.identity().extractRotation(controller.matrixWorld);
+            raycaster.ray.origin.setFromMatrixPosition(controller.matrixWorld);
+            raycaster.ray.direction.set(0, 0, -1).applyMatrix4(tempMatrix);
+
+            const intersects = raycaster.intersectObject(loadedModel, true);
+            console.log("DEBUG: Intersecciones encontradas:", intersects.length);
+
+            if (intersects.length > 0) {
+                console.log("DEBUG: ¡Intersección con el modelo FBX!");
+                grabbedObject = loadedModel;
+                // Usar attach para que se mueva con el mando
+                controller.attach(grabbedObject);
+                grabbingController = controller; // Marcar que este mando está agarrando
+                console.log("DEBUG: Modelo FBX agarrado.");
+                if (modelBoxHelper) modelBoxHelper.visible = false;
+            } else {
+                 console.log("DEBUG: No se encontró intersección con el modelo FBX.");
             }
         }
 
-        // --- Funciones WebXR Manuales Eliminadas ---
-        // checkXRSupport, startXRSession, onSessionEnded, endXRSession
+        function onSelectEnd(event) {
+            const controller = event.target;
+            console.log("Evento: selectend detectado");
+
+            // Solo soltar si este mando estaba agarrando el objeto
+            if (grabbingController === controller && grabbedObject) {
+                console.log("DEBUG: Soltando el modelo FBX.");
+                // Readjuntar a la escena manteniendo transformación global
+                scene.attach(grabbedObject);
+                grabbedObject = null;
+                grabbingController = null;
+                if (modelBoxHelper) modelBoxHelper.visible = true;
+            }
+        }
+
+        // --- Redimensionar Ventana ---
+        function onWindowResize() {
+            // Solo redimensionar si NO estamos en sesión XR
+            if (renderer && camera && !renderer.xr.isPresenting) {
+                camera.aspect = window.innerWidth / window.innerHeight;
+                camera.updateProjectionMatrix();
+                renderer.setSize(window.innerWidth, window.innerHeight);
+                 console.log("Renderer redimensionado.");
+            }
+        }
+
+        // --- Bucle de Animación/Renderizado ---
+        function animate(timestamp, frame) {
+            // Actualizar BoxHelper si existe y es visible
+            if (modelBoxHelper && modelBoxHelper.visible) {
+                modelBoxHelper.update();
+            }
+
+            // Renderizar la escena
+            renderer.render(scene, camera);
+        }
 
         // --- Inicio de la Aplicación ---
         document.addEventListener('DOMContentLoaded', () => {
               console.log("Evento DOMContentLoaded recibido.");
              initThree();
-
-             // Listener de redimensionado
-             window.addEventListener('resize', () => {
-                 // Solo redimensionar si NO estamos en sesión XR
-                 if (renderer && camera && !renderer.xr.isPresenting) {
-                     camera.aspect = window.innerWidth / window.innerHeight;
-                     camera.updateProjectionMatrix();
-                     renderer.setSize(window.innerWidth, window.innerHeight);
-                      console.log("Renderer redimensionado.");
-                 }
-            });
+             window.addEventListener('resize', onWindowResize);
         });
 
         console.log("Fin del script (módulo) principal.");
@@ -169,6 +272,7 @@
     </script>
 </body>
 </html>
+
 
 
 
