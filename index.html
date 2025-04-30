@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
     <meta charset="utf-8">
-    <title>WebXR Billar - Física Manual Corregida v2</title> <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>WebXR Billar - Física Manual Corregida</title> <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
     <style>
         body { margin: 0; overflow: hidden; font-family: monospace; background-color: #000; }
         canvas { display: block; }
@@ -28,19 +28,19 @@
         import * as THREE from 'three';
         import { ARButton } from 'three/addons/webxr/ARButton.js';
 
-        // --- Global Variables ---
+        // --- Variables Globales ---
         let camera, scene, renderer;
-        let tableGroup; // Contenedor
+        let tableGroup; // Contenedor de la mesa
         const balls = []; // Array para { mesh, velocity, name }
         let cueBall; // Referencia a la bola blanca
 
-        // WebXR Controller Variables
+        // Variables de Controlador WebXR
         let controller1, controller2;
-        let cueController = null; // Se asignará al controller2
+        let cueController = null; // Mando para disparar (controller2)
         let cueStickMesh; // Visual del taco
         let isTriggerDown = false;
 
-        // Gameplay State
+        // Estado del Juego
         let score = 0;
         let isStrokeInProgress = false;
         let hitYellowAfterStrokeStart = false;
@@ -48,9 +48,10 @@
         let cushionHitsThisStroke = 0;
 
         // Constantes de Física Manual
-        const FRICTION = 0.988; // Fricción reducida
-        const MIN_VELOCITY_SQ = 0.0001;
-        const CUSHION_RESTITUTION = 0.6;
+        // ***** CAMBIO: Fricción reducida *****
+        const FRICTION = 0.988; // Factor de fricción (más cercano a 1 = menos fricción)
+        const MIN_VELOCITY_SQ = 0.0001; // Velocidad^2 por debajo de la cual se considera parada
+        const CUSHION_RESTITUTION = 0.6; // Rebote de la banda (0 a 1)
         const BALL_RESTITUTION = 0.9; // Rebote bola-bola (usado en colisión simple)
 
         // Constantes de la mesa y bolas
@@ -72,13 +73,13 @@
 
         init();
 
-        // --- Initialization ---
+        // --- Inicialización ---
         function init() {
-            console.log("Iniciando escena WebXR Billar (Física Manual - Correcciones Finales v2 - Revertido)..."); // Log actualizado
+            console.log("Iniciando escena WebXR Billar (Física Manual - Correcciones Finales)..."); // Log actualizado
 
             scene = new THREE.Scene();
             camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 100);
-            camera.position.set(0, tableSurfaceY + 1.5, 1); // Posición inicial cámara
+            camera.position.set(0, tableSurfaceY + 1.5, 1);
 
             renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
             renderer.setSize(window.innerWidth, window.innerHeight);
@@ -106,9 +107,7 @@
             spotLight.shadow.camera.fov = 50;
             spotLight.shadow.bias = -0.0005;
             scene.add(spotLight);
-            scene.add(camera); // Añadir cámara directamente a la escena
-
-            // --- NO hay mundo físico de Cannon.js ---
+            scene.add(camera);
 
             // --- Crear Grupo de la Mesa ---
             tableGroup = new THREE.Group();
@@ -123,14 +122,14 @@
             createBallsManualPhysics(tableGroup);
 
             // --- Configurar Mandos (Visual) ---
-            setupControllers(); // Taco posicionado
+            setupControllers();
 
             // --- Event Listeners ---
             window.addEventListener('resize', onWindowResize, false);
 
             // --- Start Animation Loop ---
             renderer.setAnimationLoop(animate);
-            console.log("Inicialización completa (Física Manual - Correcciones Finales v2 - Revertido).");
+            console.log("Inicialización completa (Física Manual - Correcciones Finales).");
         }
 
         // --- Función para crear solo la superficie visual ---
@@ -212,14 +211,14 @@
               // console.log("Mallas visuales de bolas creadas.");
         }
 
-        // --- Setup Controllers (Añadir directamente a la escena) ---
+        // --- Setup Controllers (Con taco posicionado correctamente) ---
         function setupControllers() {
              // console.log("Configurando mandos (Taco en Controller 2)...");
              controller1 = renderer.xr.getController(0); // Izquierda
              if (controller1) {
                  controller1.addEventListener('selectstart', onSelectStart);
                  controller1.addEventListener('selectend', onSelectEnd);
-                 scene.add(controller1); // Añadir a escena
+                 scene.add(controller1);
                  const lineMaterial = new THREE.LineBasicMaterial({ color: 0xcccccc });
                  const lineGeometry = new THREE.BufferGeometry().setFromPoints([ new THREE.Vector3(0, 0, 0), new THREE.Vector3(0, 0, -0.2) ]);
                  const line1 = new THREE.Line(lineGeometry, lineMaterial);
@@ -230,7 +229,7 @@
              if (controller2) {
                   controller2.addEventListener('selectstart', onSelectStart);
                   controller2.addEventListener('selectend', onSelectEnd);
-                  scene.add(controller2); // Añadir a escena
+                  scene.add(controller2);
                   cueController = controller2;
                   const cueLength = 1.2;
                   const cueRadius = 0.01;
@@ -303,8 +302,6 @@
         // --- Animation Loop (FÍSICA MANUAL - FRICCIÓN CORREGIDA - COLISIÓN SIMPLE ORIGINAL) ---
         function animate() {
             const delta = clock.getDelta(); // Obtener delta time
-
-            // --- NO hay input de movimiento de escena aquí ---
 
             // --- Actualizar Física Manual ---
             let allStopped = true;
@@ -399,4 +396,3 @@
     </script>
 </body>
 </html>
-
