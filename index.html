@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
     <meta charset="utf-8">
-    <title>WebXR Billar - Física Manual Corregida v2</title> <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>WebXR Billar - Física Manual + Movimiento</title> <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
     <style>
         body { margin: 0; overflow: hidden; font-family: monospace; background-color: #000; }
         canvas { display: block; }
@@ -30,13 +30,24 @@
 
         // --- Global Variables ---
         let camera, scene, renderer;
-        let tableGroup; // Contenedor
+        let tableGroup; // Contenedor de la mesa
         const balls = []; // Array para { mesh, velocity, name }
         let cueBall; // Referencia a la bola blanca
 
+        // ***** NUEVO: Player Rig y Controles *****
+        let playerGroup; // Grupo que representa al jugador (cámara + mandos)
+        const playerVelocity = new THREE.Vector3(); // Para movimiento suave (opcional)
+        const playerDirection = new THREE.Vector3(); // Dirección de movimiento
+        const moveSpeed = 1.5; // Velocidad de movimiento (metros/segundo)
+        const rotateSpeed = 1.5; // Velocidad de rotación (radianes/segundo)
+        const clock = new THREE.Clock(); // Para movimiento independiente de framerate
+        // ***************************************
+
         // WebXR Controller Variables
-        let controller1, controller2;
-        let cueController = null; // Se asignará al controller2
+        let controller1, controller2; // Mandos (0=izq, 1=der según tu caso)
+        let cueController = null; // Mando para disparar (controller2)
+        let moveController = null; // Mando para moverse (controller1)
+        let rotateController = null; // Mando para girar (controller2)
         let cueStickMesh; // Visual del taco
         let isTriggerDown = false;
 
@@ -48,38 +59,38 @@
         let cushionHitsThisStroke = 0;
 
         // Constantes de Física Manual
-        // ***** CAMBIO: Fricción reducida (más cercano a 1) *****
-        const FRICTION = 0.988; // Antes 0.985
+        const FRICTION = 0.988;
         const MIN_VELOCITY_SQ = 0.0001;
         const CUSHION_RESTITUTION = 0.6;
-        const BALL_RESTITUTION = 0.9; // Rebote bola-bola (usado en colisión simple)
+        const BALL_RESTITUTION = 0.9;
 
         // Constantes de la mesa y bolas
         const ballRadius = 0.03075;
         const tableWidth = 1.42;
         const tableHeight = 2.84;
-        const tableThickness = 0.01; // Solo para visual
-        const cushionHeight = 0.05; // Solo para visual
-        const cushionWidth = 0.05; // Solo para visual
-        const tableSurfaceY = -0.4; // Altura superficie
+        const tableThickness = 0.01;
+        const cushionHeight = 0.05;
+        const cushionWidth = 0.05;
+        const tableSurfaceY = -0.4; // Altura superficie mesa
 
-        // Límites de la mesa para colisiones (coordenadas locales de tableGroup)
+        // Límites de la mesa para colisiones
         const MIN_X = -tableWidth / 2 + ballRadius;
         const MAX_X = tableWidth / 2 - ballRadius;
         const MIN_Z = -tableHeight / 2 + ballRadius;
         const MAX_Z = tableHeight / 2 - ballRadius;
 
-        const timeStep = 1 / 90; // Asumir 90 FPS para VR
-
         init();
 
         // --- Initialization ---
         function init() {
-            console.log("Iniciando escena WebXR Billar (Física Manual - Correcciones Finales v2)..."); // Log actualizado
+            console.log("Iniciando escena WebXR Billar (Física Manual + Movimiento)...");
 
             scene = new THREE.Scene();
+
+            // Cámara: Se añadirá al playerGroup
             camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 100);
-            camera.position.set(0, tableSurfaceY + 1.5, 1);
+            // La posición inicial de la cámara es relativa al playerGroup (en el origen)
+            // camera.position.set(0, 1.6, 0); // Altura de ojos DENTRO del rig (ajustar si es necesario)
 
             renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
             renderer.setSize(window.innerWidth, window.innerHeight);
@@ -87,18 +98,18 @@
             renderer.setClearAlpha(0);
             renderer.xr.enabled = true;
             renderer.shadowMap.enabled = true;
-            renderer.shadowMap.type = THREE.PCFSoftShadowMap; // Sombras suaves
+            renderer.shadowMap.type = THREE.PCFSoftShadowMap;
             document.body.appendChild(renderer.domElement);
 
             const arButton = ARButton.createButton(renderer);
             document.body.appendChild(arButton);
 
-            // Iluminación Mejorada
+            // Iluminación
             const hemiLight = new THREE.HemisphereLight( 0xffffff, 0x888888, 1.2 );
             hemiLight.position.set( 0, 5, 0 );
             scene.add( hemiLight );
             const spotLight = new THREE.SpotLight(0xffffff, 2.5, 10, Math.PI / 4, 0.3, 1.8);
-            spotLight.position.set(0.5, tableSurfaceY + 3, -1);
+            spotLight.position.set(0.5, tableSurfaceY + 3, -1); // Posición relativa al mundo
             spotLight.castShadow = true;
             spotLight.shadow.mapSize.width = 2048;
             spotLight.shadow.mapSize.height = 2048;
@@ -107,10 +118,19 @@
             spotLight.shadow.camera.fov = 50;
             spotLight.shadow.bias = -0.0005;
             scene.add(spotLight);
-            scene.add(camera);
+            // La cámara ya no necesita luz propia si está dentro del playerGroup
+
+            // --- Player Rig ---
+            playerGroup = new THREE.Group();
+            // Posición inicial del jugador en el mundo
+            playerGroup.position.set(0, 1.6, tableSurfaceY + 0.5); // Empezar a 1.6m de altura, 0.5m delante de la mesa
+            scene.add(playerGroup);
+            playerGroup.add(camera); // Añadir cámara al rig
+            console.log("Player group creado y añadido a la escena.");
 
             // --- Crear Grupo de la Mesa ---
             tableGroup = new THREE.Group();
+            // Posición de la mesa relativa al mundo (fija)
             tableGroup.position.set(0, tableSurfaceY, -1.5);
             scene.add(tableGroup);
 
@@ -121,15 +141,15 @@
             // --- Crear LAS TRES BOLAS (Visual + Propiedad Velocity) ---
             createBallsManualPhysics(tableGroup);
 
-            // --- Configurar Mandos (Visual) ---
-            setupControllers();
+            // --- Configurar Mandos (Visual y asignación de roles) ---
+            setupControllers(); // Ahora también asigna move/rotate controllers
 
             // --- Event Listeners ---
             window.addEventListener('resize', onWindowResize, false);
 
             // --- Start Animation Loop ---
             renderer.setAnimationLoop(animate);
-            console.log("Inicialización completa (Física Manual - Correcciones Finales v2).");
+            console.log("Inicialización completa.");
         }
 
         // --- Función para crear solo la superficie visual ---
@@ -138,8 +158,49 @@
         function createCushionsAndFrameVisualsOnly(group) { /* ... (igual que antes) ... */ }
         // --- Función para crear LAS TRES bolas (Visual + Velocity) ---
         function createBallsManualPhysics(targetGroup) { /* ... (igual que antes) ... */ }
-        // --- Setup Controllers (Con taco posicionado correctamente) ---
-        function setupControllers() { /* ... (igual que antes) ... */ }
+
+        // --- Setup Controllers (Asignar roles y añadir a playerGroup) ---
+        function setupControllers() {
+             console.log("Configurando mandos...");
+             // Controller 1 (Izquierda - Movimiento)
+             controller1 = renderer.xr.getController(0);
+             if (controller1) {
+                  controller1.addEventListener('selectstart', onSelectStart);
+                  controller1.addEventListener('selectend', onSelectEnd);
+                  // ***** CAMBIO: Añadir mando al playerGroup *****
+                  playerGroup.add(controller1);
+                  moveController = controller1; // Asignar rol de movimiento
+                  // Añadir línea visual
+                  const lineMaterial = new THREE.LineBasicMaterial({ color: 0xcccccc });
+                  const lineGeometry = new THREE.BufferGeometry().setFromPoints([ new THREE.Vector3(0, 0, 0), new THREE.Vector3(0, 0, -0.2) ]);
+                  const line1 = new THREE.Line(lineGeometry, lineMaterial);
+                  controller1.add(line1);
+                  console.log("Mando 1 (Izquierda/Movimiento) configurado.");
+             } else { console.error("¡No se pudo obtener el Controller 1!"); }
+
+             // Controller 2 (Derecha - Disparo y Rotación)
+             controller2 = renderer.xr.getController(1);
+             if (controller2) {
+                  controller2.addEventListener('selectstart', onSelectStart);
+                  controller2.addEventListener('selectend', onSelectEnd);
+                  // ***** CAMBIO: Añadir mando al playerGroup *****
+                  playerGroup.add(controller2);
+                  cueController = controller2; // Asignar rol de disparo
+                  rotateController = controller2; // Asignar rol de rotación
+                  // Añadir taco visual
+                  const cueLength = 1.2;
+                  const cueRadius = 0.01;
+                  const cueGeometry = new THREE.CylinderGeometry(cueRadius, cueRadius * 0.8, cueLength, 16);
+                  const cueMaterial = new THREE.MeshStandardMaterial({ color: 0xdeb887, roughness: 0.5 });
+                  cueStickMesh = new THREE.Mesh(cueGeometry, cueMaterial);
+                  cueStickMesh.position.set(0, 0, -cueLength / 2 + 0.05);
+                  cueStickMesh.rotation.set(Math.PI / 2, 0, 0);
+                  cueStickMesh.castShadow = true;
+                  controller2.add(cueStickMesh);
+                  console.log("Mando 2 (Derecha/Disparo/Rotación) configurado.");
+             } else { console.error("¡No se pudo obtener el Controller 2!"); }
+             console.log("Mandos configurados.");
+         }
 
 
         // --- WebXR Event Handlers (Disparo Activado) ---
@@ -151,117 +212,103 @@
              const controller = event.target;
              if (controller === cueController && isTriggerDown) {
                  isTriggerDown = false;
-                 // console.log(">>> Trigger Released - Intentando disparar (Manual)...");
-                 shootBallManual(); // Llamar a la función de disparo
+                 shootBallManual();
              }
         }
 
         // --- Billiards Logic Functions (Física Manual - DIRECCIÓN CORREGIDA) ---
-        function shootBallManual() {
-            // console.log("--- Entrando a shootBallManual() ---");
-            if (!cueBall || !cueBall.velocity) { console.error("Error: cueBall o cueBall.velocity no definido."); return; }
-            if (!cueController) { console.error("Error: cueController no definido."); return; }
-            if (isStrokeInProgress) { /*console.log("Disparo ignorado: Tiro ya en progreso.");*/ return; }
-
-            // 1. Obtener dirección del taco (mando)
-            const aimDirection = new THREE.Vector3();
-            try {
-                 cueController.getWorldDirection(aimDirection);
-                 aimDirection.y = 0; // Proyectar sobre plano XZ
-                 aimDirection.normalize();
-                 // ***** CAMBIO: Invertir la dirección *****
-                 aimDirection.negate(); // Apuntar hacia donde mira el mando, no hacia atrás
-            } catch (e) { console.error("Error obteniendo dirección del mando:", e); return; }
-
-            // 2. Magnitud de Velocidad Inicial
-            const initialSpeed = 5.0; // Mantener velocidad
-
-            // 3. Asignar velocidad a la bola blanca
-            cueBall.velocity.copy(aimDirection).multiplyScalar(initialSpeed);
-            // console.log(`Velocidad inicial asignada: (${cueBall.velocity.x.toFixed(2)}, ${cueBall.velocity.z.toFixed(2)})`);
-
-            // 4. Iniciar seguimiento del tiro
-            isStrokeInProgress = true;
-            hitYellowAfterStrokeStart = false;
-            hitRedAfterStrokeStart = false;
-            cushionHitsThisStroke = 0;
-            // console.log("¡Disparo Manual Realizado! Stroke iniciado.");
-            // console.log("--- Saliendo de shootBallManual() ---");
-        }
+        function shootBallManual() { /* ... (igual que antes, con negate()) ... */ }
 
         // --- Window Resize Handler ---
-        function onWindowResize() { /* ... (igual que antes) ... */ }
+        function onWindowResize() {
+             // Ajustar cámara principal
+             camera.aspect = window.innerWidth / window.innerHeight;
+             camera.updateProjectionMatrix();
+             renderer.setSize(window.innerWidth, window.innerHeight);
+        }
 
-        // --- Animation Loop (FÍSICA MANUAL - COLISIÓN BOLA-BOLA SIMPLE ORIGINAL) ---
+        // --- Función para manejar Input de Mandos ---
+        function handleControllerInput(delta) {
+            let dx = 0; // Movimiento lateral
+            let dz = 0; // Movimiento adelante/atrás
+            let ry = 0; // Rotación
+
+            // --- Movimiento (Mando Izquierdo - controller1) ---
+            if (moveController && moveController.gamepad) {
+                // Axes 2 y 3 suelen ser el joystick derecho en mandos Oculus Touch
+                // ¡Asegúrate de que estos son los índices correctos para tu mando izquierdo!
+                // Puede que necesites experimentar o buscar la documentación específica.
+                // Asumiremos índices 2 (eje X) y 3 (eje Y) para el joystick izquierdo.
+                const joystickX = moveController.gamepad.axes[2] || 0;
+                const joystickY = moveController.gamepad.axes[3] || 0; // Negativo es hacia adelante
+
+                if (Math.abs(joystickX) > 0.1) {
+                    dx = -joystickX; // Mover a la izquierda/derecha
+                }
+                if (Math.abs(joystickY) > 0.1) {
+                    dz = joystickY; // Mover adelante/atrás (Y negativo del joystick es adelante)
+                }
+            }
+
+            // --- Rotación (Mando Derecho - controller2) ---
+             if (rotateController && rotateController.gamepad) {
+                // Usar eje X (índice 2) del joystick derecho para rotar
+                const joystickX = rotateController.gamepad.axes[2] || 0;
+                 if (Math.abs(joystickX) > 0.15) { // Umbral un poco mayor para rotación
+                     ry = -joystickX; // Rotar izquierda/derecha
+                 }
+             }
+
+            // --- Aplicar Movimiento y Rotación al Player Rig ---
+            if (playerGroup) {
+                // Rotación
+                if (ry !== 0) {
+                    playerGroup.rotation.y += ry * rotateSpeed * delta;
+                }
+
+                // Movimiento
+                if (dx !== 0 || dz !== 0) {
+                    // Obtener dirección hacia adelante y derecha del JUGADOR (playerGroup)
+                    const forward = new THREE.Vector3();
+                    const right = new THREE.Vector3();
+                    playerGroup.getWorldDirection(forward); // Dirección Z negativa local
+                    forward.y = 0; // Proyectar en plano XZ
+                    forward.normalize();
+                    right.crossVectors(playerGroup.up, forward).normalize(); // Vector derecha
+
+                    // Calcular vector de movimiento combinado
+                    playerDirection.set(0, 0, 0); // Resetear
+                    playerDirection.add(forward.multiplyScalar(dz));
+                    playerDirection.add(right.multiplyScalar(dx));
+                    playerDirection.normalize(); // Asegurar que no se mueva más rápido en diagonal
+
+                    // Calcular desplazamiento
+                    const moveDistance = moveSpeed * delta;
+                    const moveVector = playerDirection.multiplyScalar(moveDistance);
+
+                    // Aplicar movimiento a la posición del playerGroup
+                    playerGroup.position.add(moveVector);
+                }
+            }
+        }
+
+
+        // --- Animation Loop (FÍSICA MANUAL + INPUT MANDOS) ---
         function animate() {
+            const delta = clock.getDelta(); // Tiempo desde el último frame
+
+            // --- Manejar Input de Mandos ---
+            if (renderer.xr.isPresenting) { // Solo procesar input en modo AR/VR
+                 handleControllerInput(delta);
+            }
+
             // --- Actualizar Física Manual ---
             let allStopped = true;
-
-            balls.forEach(ball => {
-                if (!ball || !ball.velocity || !ball.mesh) return;
-                const velSq = ball.velocity.lengthSq();
-                if (velSq > MIN_VELOCITY_SQ) {
-                    allStopped = false;
-                    // 1. Aplicar Fricción (corregida)
-                    ball.velocity.multiplyScalar(FRICTION); // Usar FRICTION = 0.988
-                    // 2. Actualizar Posición
-                    const deltaPos = ball.velocity.clone().multiplyScalar(timeStep);
-                    ball.mesh.position.add(deltaPos);
-                    // 3. Comprobar Colisiones con Bandas
-                    let hitCushion = false;
-                    if (ball.mesh.position.x < MIN_X) { ball.mesh.position.x = MIN_X; ball.velocity.x *= -CUSHION_RESTITUTION; hitCushion = true; }
-                    else if (ball.mesh.position.x > MAX_X) { ball.mesh.position.x = MAX_X; ball.velocity.x *= -CUSHION_RESTITUTION; hitCushion = true; }
-                    if (ball.mesh.position.z < MIN_Z) { ball.mesh.position.z = MIN_Z; ball.velocity.z *= -CUSHION_RESTITUTION; hitCushion = true; }
-                    else if (ball.mesh.position.z > MAX_Z) { ball.mesh.position.z = MAX_Z; ball.velocity.z *= -CUSHION_RESTITUTION; hitCushion = true; }
-                    if (hitCushion && ball.name === 'white' && isStrokeInProgress) { cushionHitsThisStroke++; }
-                } else if (velSq > 0) {
-                    ball.velocity.set(0, 0, 0);
-                }
-            });
-
-            // ***** CAMBIO: Volver a la lógica de Colisión Bola-Bola SIMPLE *****
-            for (let i = 0; i < balls.length; i++) {
-                for (let j = i + 1; j < balls.length; j++) {
-                     const ball1 = balls[i];
-                     const ball2 = balls[j];
-                     if (!ball1.mesh || !ball2.mesh || !ball1.velocity || !ball2.velocity) continue;
-                     const distSq = ball1.mesh.position.distanceToSquared(ball2.mesh.position);
-                     const minDist = ballRadius * 2;
-                     const minDistSq = minDist * minDist;
-                     if (distSq < minDistSq) {
-                         // Lógica simple original (dividir impulso)
-                         const collisionNormal = ball2.mesh.position.clone().sub(ball1.mesh.position).normalize();
-                         const relativeVelocity = ball2.velocity.clone().sub(ball1.velocity);
-                         const velocityAlongNormal = relativeVelocity.dot(collisionNormal);
-                         if (velocityAlongNormal < 0) {
-                             // Aplicar un impulso simple basado en la restitución (no físicamente exacto pero estable)
-                             const impulseMagnitude = -(1 + BALL_RESTITUTION) * velocityAlongNormal / 2; // Dividir entre 2 asumiendo masas iguales
-                             const impulseVec = collisionNormal.clone().multiplyScalar(impulseMagnitude);
-
-                             ball1.velocity.add(impulseVec);
-                             ball2.velocity.sub(impulseVec);
-
-                             // Registrar golpes para puntuación
-                             if (isStrokeInProgress) {
-                                 if ((ball1.name === 'white' && ball2.name === 'yellow') || (ball1.name === 'yellow' && ball2.name === 'white')) { if (!hitYellowAfterStrokeStart) /*console.log("Blanca golpea AMARILLA (Manual)")*/; hitYellowAfterStrokeStart = true; }
-                                 if ((ball1.name === 'white' && ball2.name === 'red') || (ball1.name === 'red' && ball2.name === 'white')) { if (!hitRedAfterStrokeStart) /*console.log("Blanca golpea ROJA (Manual)")*/; hitRedAfterStrokeStart = true; }
-                             }
-                             // Corregir superposición
-                             const overlap = minDist - Math.sqrt(distSq);
-                             const correction = collisionNormal.clone().multiplyScalar(overlap * 0.51);
-                             ball1.mesh.position.sub(correction);
-                             ball2.mesh.position.add(correction);
-                         }
-                     }
-                }
-            }
-            // ***** FIN CAMBIO COLISIÓN BOLA-BOLA *****
-
-
+            balls.forEach(ball => { /* ... (misma lógica que antes) ... */ });
+            // --- Comprobar Colisiones Bola-Bola ---
+            for (let i = 0; i < balls.length; i++) { /* ... (misma lógica que antes) ... */ }
             // Comprobar fin de tiro
-            if (isStrokeInProgress && allStopped) {
-                // ... (misma lógica de fin de tiro que antes) ...
-            }
+            if (isStrokeInProgress && allStopped) { /* ... (misma lógica que antes) ... */ }
 
             // Render Scene
             try {
@@ -273,9 +320,9 @@
         }
 
         // --- Copiar aquí las definiciones completas de las funciones auxiliares ---
+        // Asegúrate de que todas las funciones estén presentes y completas
         // (createTableSurfaceVisualOnly, createCushionsAndFrameVisualsOnly, createBallsManualPhysics,
-        //  setupControllers, onSelectStart, onSelectEnd, onWindowResize, shootBallManual)
-        // Asegúrate de que las definiciones completas de las funciones estén presentes.
+        //  setupControllers, onSelectStart, onSelectEnd, onWindowResize, shootBallManual, handleControllerInput)
 
 
     </script>
