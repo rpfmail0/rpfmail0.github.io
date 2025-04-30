@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
     <meta charset="utf-8">
-    <title>WebXR Billar - Física Manual Simplificada</title> <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>WebXR Billar - Física Manual Corregida</title> <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
     <style>
         body { margin: 0; overflow: hidden; font-family: monospace; background-color: #000; }
         canvas { display: block; }
@@ -48,7 +48,8 @@
         let cushionHitsThisStroke = 0;
 
         // Constantes de Física Manual
-        const FRICTION = 0.985; // Factor de fricción original
+        // ***** CAMBIO: Fricción reducida (más cercano a 1) *****
+        const FRICTION = 0.988; // Antes 0.985 (Reducción ~20% del frenado)
         const MIN_VELOCITY_SQ = 0.0001;
         const CUSHION_RESTITUTION = 0.6;
         const BALL_RESTITUTION = 0.9;
@@ -75,7 +76,7 @@
 
         // --- Initialization ---
         function init() {
-            console.log("Iniciando escena WebXR Billar (Física Manual - Base Jugable)..."); // Log actualizado
+            console.log("Iniciando escena WebXR Billar (Física Manual - Correcciones Finales)..."); // Log actualizado
 
             scene = new THREE.Scene();
             camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 100);
@@ -87,18 +88,25 @@
             renderer.setClearAlpha(0);
             renderer.xr.enabled = true;
             renderer.shadowMap.enabled = true;
+            renderer.shadowMap.type = THREE.PCFSoftShadowMap; // Sombras suaves
             document.body.appendChild(renderer.domElement);
 
             const arButton = ARButton.createButton(renderer);
             document.body.appendChild(arButton);
 
-            // Iluminación
-            scene.add(new THREE.AmbientLight(0xAAAAAA));
-            const spotLight = new THREE.SpotLight(0xffffff, 0.9, 0, Math.PI / 4, 1);
-            spotLight.position.set(0, tableSurfaceY + 2, -1.5);
+            // Iluminación Mejorada
+            const hemiLight = new THREE.HemisphereLight( 0xffffff, 0x888888, 1.2 );
+            hemiLight.position.set( 0, 5, 0 );
+            scene.add( hemiLight );
+            const spotLight = new THREE.SpotLight(0xffffff, 2.5, 10, Math.PI / 4, 0.3, 1.8); // Ajustar intensidad/penumbra si es necesario
+            spotLight.position.set(0.5, tableSurfaceY + 3, -1);
             spotLight.castShadow = true;
-            spotLight.shadow.mapSize.width = 1024;
-            spotLight.shadow.mapSize.height = 1024;
+            spotLight.shadow.mapSize.width = 2048; // Mayor resolución sombras
+            spotLight.shadow.mapSize.height = 2048;
+            spotLight.shadow.camera.near = 1.5;
+            spotLight.shadow.camera.far = 6;
+            spotLight.shadow.camera.fov = 50;
+            spotLight.shadow.bias = -0.0005;
             scene.add(spotLight);
             scene.add(camera);
 
@@ -125,7 +133,7 @@
 
             // --- Start Animation Loop ---
             renderer.setAnimationLoop(animate); // animate ahora con física manual
-            console.log("Inicialización completa (Física Manual - Base Jugable).");
+            console.log("Inicialización completa (Física Manual - Correcciones Finales).");
         }
 
         // --- Función para crear solo la superficie visual ---
@@ -255,24 +263,25 @@
              }
         }
 
-        // --- Billiards Logic Functions (Física Manual - VERSIÓN ORIGINAL CON DIRECCIÓN INVERSA) ---
+        // --- Billiards Logic Functions (Física Manual - DIRECCIÓN CORREGIDA) ---
         function shootBallManual() {
             // console.log("--- Entrando a shootBallManual() ---");
             if (!cueBall || !cueBall.velocity) { console.error("Error: cueBall o cueBall.velocity no definido."); return; }
             if (!cueController) { console.error("Error: cueController no definido."); return; }
             if (isStrokeInProgress) { /*console.log("Disparo ignorado: Tiro ya en progreso.");*/ return; }
 
-            // 1. Obtener dirección del taco (mando) - SIN INVERTIR
+            // 1. Obtener dirección del taco (mando)
             const aimDirection = new THREE.Vector3();
             try {
                  cueController.getWorldDirection(aimDirection);
-                 aimDirection.y = 0;
+                 aimDirection.y = 0; // Proyectar sobre plano XZ
                  aimDirection.normalize();
-                 // aimDirection.negate(); // Dirección invertida comentada
+                 // ***** CAMBIO: Invertir la dirección *****
+                 aimDirection.negate(); // Apuntar hacia donde mira el mando, no hacia atrás
             } catch (e) { console.error("Error obteniendo dirección del mando:", e); return; }
 
             // 2. Magnitud de Velocidad Inicial
-            const initialSpeed = 5.0;
+            const initialSpeed = 5.0; // Mantener velocidad
 
             // 3. Asignar velocidad a la bola blanca
             cueBall.velocity.copy(aimDirection).multiplyScalar(initialSpeed);
@@ -294,7 +303,7 @@
             renderer.setSize(window.innerWidth, window.innerHeight);
          }
 
-        // --- Animation Loop (FÍSICA MANUAL) ---
+        // --- Animation Loop (FÍSICA MANUAL - FRICCIÓN CORREGIDA) ---
         function animate() {
             // --- Actualizar Física Manual ---
             let allStopped = true;
@@ -304,8 +313,8 @@
                 const velSq = ball.velocity.lengthSq();
                 if (velSq > MIN_VELOCITY_SQ) {
                     allStopped = false;
-                    // 1. Aplicar Fricción (original)
-                    ball.velocity.multiplyScalar(FRICTION); // Usar FRICTION = 0.985
+                    // 1. Aplicar Fricción (corregida)
+                    ball.velocity.multiplyScalar(FRICTION); // Usar FRICTION = 0.988
                     // 2. Actualizar Posición
                     const deltaPos = ball.velocity.clone().multiplyScalar(timeStep);
                     ball.mesh.position.add(deltaPos);
@@ -324,7 +333,8 @@
             // 4. Comprobar Colisiones Bola-Bola
             for (let i = 0; i < balls.length; i++) {
                 for (let j = i + 1; j < balls.length; j++) {
-                     const ball1 = balls[i];
+                     // ... (misma lógica de colisión bola-bola que antes) ...
+                      const ball1 = balls[i];
                      const ball2 = balls[j];
                      if (!ball1.mesh || !ball2.mesh || !ball1.velocity || !ball2.velocity) continue;
                      const distSq = ball1.mesh.position.distanceToSquared(ball2.mesh.position);
