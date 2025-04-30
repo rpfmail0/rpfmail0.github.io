@@ -2,8 +2,7 @@
 <html lang="es">
 <head>
     <meta charset="utf-8">
-    <title>WebXR Billar - Física Manual Simplificada</title>
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>WebXR Billar - Base Visual Pura (Sin Cannon)</title> <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
     <style>
         body { margin: 0; overflow: hidden; font-family: monospace; background-color: #000; }
         canvas { display: block; }
@@ -35,49 +34,28 @@
         const balls = []; // Array para { mesh, velocity, name }
         let cueBall; // Referencia a la bola blanca
 
+        // --- NO hay variables de física Cannon ---
+
         // WebXR Controller Variables
         let controller1, controller2;
         let cueController = null; // Se asignará al controller2
         let cueStickMesh; // Visual del taco
         let isTriggerDown = false;
 
-        // Gameplay State
-        let score = 0; // Mantener puntuación básica
-        let isStrokeInProgress = false; // Para evitar disparos múltiples
-        // Variables de seguimiento de golpes (aún pueden ser útiles)
-        let hitYellowAfterStrokeStart = false;
-        let hitRedAfterStrokeStart = false;
-        let cushionHitsThisStroke = 0; // Contaremos rebotes manuales
-
-        // Constantes de Física Manual
-        const FRICTION = 0.985; // Factor de fricción (más cercano a 1 = menos fricción)
-        const MIN_VELOCITY_SQ = 0.0001; // Velocidad^2 por debajo de la cual se considera parada
-        const CUSHION_RESTITUTION = 0.6; // Rebote de la banda (0 a 1)
-        const BALL_RESTITUTION = 0.9; // Rebote bola-bola
-
-        // Constantes de la mesa y bolas
+        // Constants
         const ballRadius = 0.03075;
         const tableWidth = 1.42;
         const tableHeight = 2.84;
-        const tableThickness = 0.01; // Solo para visual
-        const cushionHeight = 0.05; // Solo para visual
-        const cushionWidth = 0.05; // Solo para visual
-        const tableSurfaceY = -0.4; // Altura superficie
-
-        // Límites de la mesa para colisiones (coordenadas locales de tableGroup)
-        const MIN_X = -tableWidth / 2 + ballRadius;
-        const MAX_X = tableWidth / 2 - ballRadius;
-        const MIN_Z = -tableHeight / 2 + ballRadius;
-        const MAX_Z = tableHeight / 2 - ballRadius;
-
-        // Delta time aproximado (mejor usar THREE.Clock en una implementación más avanzada)
-        const timeStep = 1 / 90; // Asumir 90 FPS para VR
+        const tableThickness = 0.01;
+        const cushionHeight = 0.05;
+        const cushionWidth = 0.05;
+        const tableSurfaceY = -0.4; // Mantener altura baja
 
         init();
 
         // --- Initialization ---
         function init() {
-            console.log("Iniciando escena WebXR Billar (Física Manual)...");
+            console.log("Iniciando escena WebXR Billar (Base Visual Pura)...");
 
             scene = new THREE.Scene();
             camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 100);
@@ -112,12 +90,14 @@
             scene.add(tableGroup);
             console.log("Table group creado en Y:", tableSurfaceY);
 
-            // --- Crear Visuales de la Mesa ---
+            // --- Crear Superficie (SOLO VISUAL) ---
             createTableSurfaceVisualOnly(tableGroup);
+
+            // --- Crear Cojines y Marco (SOLO VISUAL) ---
             createCushionsAndFrameVisualsOnly(tableGroup);
 
             // --- Crear LAS TRES BOLAS (Visual + Propiedad Velocity) ---
-            createBallsManualPhysics(tableGroup); // Llama a la nueva función
+            createBallsForManualPhysics(tableGroup); // Llamar a la función modificada
 
             // --- Configurar Mandos (Visual) ---
             setupControllers(); // Taco posicionado
@@ -126,28 +106,38 @@
             window.addEventListener('resize', onWindowResize, false);
 
             // --- Start Animation Loop ---
-            renderer.setAnimationLoop(animate); // animate ahora con física manual
-            console.log("Inicialización completa (Física Manual).");
+            renderer.setAnimationLoop(animate); // animate simplificado
+            console.log("Inicialización completa (Base Visual Pura).");
         }
 
         // --- Función para crear solo la superficie visual ---
         function createTableSurfaceVisualOnly(group) {
-             const tableGeometry = new THREE.BoxGeometry(tableWidth, tableThickness, tableHeight);
-             const material = new THREE.MeshStandardMaterial({ color: 0x006400, roughness: 0.9 });
-             const mesh = new THREE.Mesh(tableGeometry, material);
-             mesh.name = "TableSurface";
-             mesh.position.y = -tableThickness / 2; // Local
-             mesh.receiveShadow = true;
-             group.add(mesh);
+             // console.log("Creando tapete visual...");
+             try {
+                 const tableGeometry = new THREE.BoxGeometry(tableWidth, tableThickness, tableHeight);
+                 const material = new THREE.MeshStandardMaterial({ color: 0x006400, roughness: 0.9 });
+                 const mesh = new THREE.Mesh(tableGeometry, material);
+                 mesh.name = "TableSurface";
+                 mesh.position.y = -tableThickness / 2; // Local
+                 mesh.receiveShadow = true;
+                 group.add(mesh);
+             } catch(e) { console.error("***** ERROR creando malla de tapete:", e); }
          }
+
 
         // --- Función para crear cojines y marco (SOLO VISUAL) ---
         function createCushionsAndFrameVisualsOnly(group) {
+            // console.log("Creando visuales de cojines y marco...");
             const cushionYPos = cushionHeight / 2;
             const woodMaterial = new THREE.MeshStandardMaterial({ color: 0x8B4513, roughness: 0.7 });
             const cushionGeometryLong = new THREE.BoxGeometry(tableWidth + 2 * cushionWidth, cushionHeight, cushionWidth);
             const cushionGeometryShort = new THREE.BoxGeometry(cushionWidth, cushionHeight, tableHeight);
-            const cushionPositions = [ /* ... */ ]; // Igual que antes
+            const cushionPositions = [
+                 { x: 0, y: cushionYPos, z: tableHeight / 2 + cushionWidth / 2, geometry: cushionGeometryLong },
+                 { x: 0, y: cushionYPos, z: -tableHeight / 2 - cushionWidth / 2, geometry: cushionGeometryLong },
+                 { x: tableWidth / 2 + cushionWidth / 2, y: cushionYPos, z: 0, geometry: cushionGeometryShort },
+                 { x: -tableWidth / 2 - cushionWidth / 2, y: cushionYPos, z: 0, geometry: cushionGeometryShort }
+            ];
 
             cushionPositions.forEach((posData, index) => {
                  try {
@@ -171,7 +161,7 @@
 
 
         // --- Función para crear LAS TRES bolas (Visual + Velocity) ---
-        function createBallsManualPhysics(targetGroup) {
+        function createBallsForManualPhysics(targetGroup) {
              console.log("Creando las 3 mallas visuales de las bolas (con velocity)...");
              const sphereGeometry = new THREE.SphereGeometry(ballRadius, 32, 32);
              const ballYPos = ballRadius; // Posición Y local sobre la superficie
@@ -215,13 +205,23 @@
         function setupControllers() {
              // console.log("Configurando mandos (Taco en Controller 2)...");
              controller1 = renderer.xr.getController(0); // Izquierda
-             if (controller1) { /* ... (añadir línea) ... */ }
+             if (controller1) {
+                  controller1.addEventListener('selectstart', onSelectStart);
+                  controller1.addEventListener('selectend', onSelectEnd);
+                  scene.add(controller1);
+                  const lineMaterial = new THREE.LineBasicMaterial({ color: 0xcccccc });
+                  const lineGeometry = new THREE.BufferGeometry().setFromPoints([ new THREE.Vector3(0, 0, 0), new THREE.Vector3(0, 0, -0.2) ]);
+                  const line1 = new THREE.Line(lineGeometry, lineMaterial);
+                  controller1.add(line1);
+             } else { console.error("¡No se pudo obtener el Controller 1!"); }
+
              controller2 = renderer.xr.getController(1); // Derecha
              if (controller2) {
                   controller2.addEventListener('selectstart', onSelectStart);
                   controller2.addEventListener('selectend', onSelectEnd);
                   scene.add(controller2);
-                  cueController = controller2;
+                  cueController = controller2; // Asignar como mando del taco
+
                   const cueLength = 1.2;
                   const cueRadius = 0.01;
                   const cueGeometry = new THREE.CylinderGeometry(cueRadius, cueRadius * 0.8, cueLength, 16);
@@ -230,194 +230,51 @@
                   cueStickMesh.position.set(0, 0, -cueLength / 2 + 0.05);
                   cueStickMesh.rotation.set(Math.PI / 2, 0, 0);
                   cueStickMesh.castShadow = true;
-                  controller2.add(cueStickMesh);
+                  controller2.add(cueStickMesh); // Añadir taco posicionado
              } else { console.error("¡No se pudo obtener el Controller 2!"); }
              // console.log("Mandos configurados.");
          }
 
 
-        // --- WebXR Event Handlers (Disparo Activado) ---
+        // --- WebXR Event Handlers (Aún no hacen nada) ---
         function onSelectStart(event) {
              const controller = event.target;
              if (controller === cueController) { isTriggerDown = true; }
         }
         function onSelectEnd(event) {
              const controller = event.target;
-             if (controller === cueController && isTriggerDown) {
-                 isTriggerDown = false;
-                 console.log(">>> Trigger Released - Intentando disparar (Manual)...");
-                 shootBallManual(); // Llamar a la nueva función de disparo
-             }
+             if (controller === cueController && isTriggerDown) { isTriggerDown = false; }
+             // No llamar a shootBall aún
         }
 
-        // --- Billiards Logic Functions (Física Manual) ---
 
-        // shootBall Function - Asigna velocidad inicial
-        function shootBallManual() {
-            console.log("--- Entrando a shootBallManual() ---");
-            if (!cueBall || !cueBall.velocity) { console.error("Error: cueBall o cueBall.velocity no definido."); return; }
-            if (!cueController) { console.error("Error: cueController no definido."); return; }
-            if (isStrokeInProgress) { console.log("Disparo ignorado: Tiro ya en progreso."); return; } // Evitar disparos múltiples
-
-            // 1. Obtener dirección del taco (mando)
-            const aimDirection = new THREE.Vector3();
-            try {
-                 cueController.getWorldDirection(aimDirection);
-                 aimDirection.y = 0; // Proyectar sobre plano XZ
-                 aimDirection.normalize();
-            } catch (e) { console.error("Error obteniendo dirección del mando:", e); return; }
-
-            // 2. Magnitud de Velocidad Inicial (fija por ahora)
-            const initialSpeed = 5.0; // Ajustar para potencia deseada (metros/segundo)
-
-            // 3. Asignar velocidad a la bola blanca
-            cueBall.velocity.copy(aimDirection).multiplyScalar(initialSpeed);
-            console.log(`Velocidad inicial asignada: (${cueBall.velocity.x.toFixed(2)}, ${cueBall.velocity.z.toFixed(2)})`);
-
-            // 4. Iniciar seguimiento del tiro
-            isStrokeInProgress = true;
-            hitYellowAfterStrokeStart = false;
-            hitRedAfterStrokeStart = false;
-            cushionHitsThisStroke = 0; // Resetear contador de rebotes manuales
-            console.log("¡Disparo Manual Realizado! Stroke iniciado.");
-            console.log("--- Saliendo de shootBallManual() ---");
-        }
-
-        // --- Window Resize Handler ---
         function onWindowResize() {
             camera.aspect = window.innerWidth / window.innerHeight;
             camera.updateProjectionMatrix();
             renderer.setSize(window.innerWidth, window.innerHeight);
         }
 
-        // --- Animation Loop (FÍSICA MANUAL) ---
+        // --- Animation Loop (Solo Render) ---
         function animate() {
-            // --- Actualizar Física Manual ---
-            let allStopped = true; // Asumir que todas están paradas al inicio del frame
-
-            balls.forEach(ball => {
-                if (!ball || !ball.velocity || !ball.mesh) return; // Saltar si falta algo
-
-                const velSq = ball.velocity.lengthSq();
-
-                // Solo procesar si la bola se está moviendo
-                if (velSq > MIN_VELOCITY_SQ) {
-                    allStopped = false; // Al menos una se mueve
-
-                    // 1. Aplicar Fricción
-                    ball.velocity.multiplyScalar(FRICTION);
-
-                    // 2. Actualizar Posición (Local a tableGroup)
-                    const deltaPos = ball.velocity.clone().multiplyScalar(timeStep);
-                    ball.mesh.position.add(deltaPos);
-
-                    // 3. Comprobar Colisiones con Bandas (Límites de la mesa)
-                    // Eje X
-                    if (ball.mesh.position.x < MIN_X) {
-                        ball.mesh.position.x = MIN_X; // Corregir posición
-                        ball.velocity.x *= -CUSHION_RESTITUTION; // Invertir y reducir velocidad X
-                        cushionHitsThisStroke++; // Contar rebote
-                    } else if (ball.mesh.position.x > MAX_X) {
-                        ball.mesh.position.x = MAX_X;
-                        ball.velocity.x *= -CUSHION_RESTITUTION;
-                        cushionHitsThisStroke++;
-                    }
-                    // Eje Z
-                    if (ball.mesh.position.z < MIN_Z) {
-                        ball.mesh.position.z = MIN_Z;
-                        ball.velocity.z *= -CUSHION_RESTITUTION;
-                        cushionHitsThisStroke++;
-                    } else if (ball.mesh.position.z > MAX_Z) {
-                        ball.mesh.position.z = MAX_Z;
-                        ball.velocity.z *= -CUSHION_RESTITUTION;
-                        cushionHitsThisStroke++;
-                    }
-                } else {
-                    // Detener completamente si la velocidad es muy baja
-                    ball.velocity.set(0, 0, 0);
-                }
-            });
-
-            // 4. Comprobar Colisiones Bola-Bola (Simplificado)
-            // (Este es un cálculo muy básico, no físicamente preciso)
-            for (let i = 0; i < balls.length; i++) {
-                for (let j = i + 1; j < balls.length; j++) {
-                    const ball1 = balls[i];
-                    const ball2 = balls[j];
-                    if (!ball1.mesh || !ball2.mesh) continue;
-
-                    const distSq = ball1.mesh.position.distanceToSquared(ball2.mesh.position);
-                    const minDist = ballRadius * 2;
-                    const minDistSq = minDist * minDist;
-
-                    if (distSq < minDistSq) {
-                        // Colisión detectada
-                        const collisionNormal = ball2.mesh.position.clone().sub(ball1.mesh.position).normalize();
-                        const relativeVelocity = ball2.velocity.clone().sub(ball1.velocity);
-                        const velocityAlongNormal = relativeVelocity.dot(collisionNormal);
-
-                        // Solo procesar si se están acercando
-                        if (velocityAlongNormal < 0) {
-                            const impulse = (-(1 + BALL_RESTITUTION) * velocityAlongNormal) / 2; // Dividir impulso entre las dos bolas (asumiendo masas iguales)
-
-                            const impulseVec = collisionNormal.multiplyScalar(impulse);
-
-                            ball1.velocity.add(impulseVec);
-                            ball2.velocity.sub(impulseVec);
-
-                            // Registrar golpes para puntuación (simplificado)
-                            if (isStrokeInProgress) {
-                                if ((ball1.name === 'white' && ball2.name === 'yellow') || (ball1.name === 'yellow' && ball2.name === 'white')) hitYellowAfterStrokeStart = true;
-                                if ((ball1.name === 'white' && ball2.name === 'red') || (ball1.name === 'red' && ball2.name === 'white')) hitRedAfterStrokeStart = true;
-                            }
-
-                            // Separar ligeramente para evitar que se peguen (opcional pero útil)
-                            const overlap = minDist - Math.sqrt(distSq);
-                            const correction = collisionNormal.multiplyScalar(overlap * 0.5);
-                            ball1.mesh.position.sub(correction);
-                            ball2.mesh.position.add(correction);
-                        }
-                    }
-                }
-            }
-
-
-            // Comprobar fin de tiro
-            if (isStrokeInProgress && allStopped) {
-                console.log("Tiro finalizado (Manual). Comprobando resultado...");
-                 // Comprobar si se hizo carambola (SIN BANDAS AÚN)
-                 if (hitYellowAfterStrokeStart && hitRedAfterStrokeStart /*&& cushionHitsThisStroke >= 3*/) {
-                     score++;
-                     console.log(`¡CARAMBOLA (sin bandas)! Puntuación: ${score}`);
-                 } else { /*console.log("Tiro fallido o carambola no válida.");*/ }
-
-                 // Resetear estado para el próximo tiro
-                 isStrokeInProgress = false;
-                 hitYellowAfterStrokeStart = false;
-                 hitRedAfterStrokeStart = false;
-                 cushionHitsThisStroke = 0;
-                 console.log("Listo para el siguiente tiro.");
-            }
-
-
             // Render Scene
             try {
                  renderer.render(scene, camera);
             } catch (e) {
                  console.error("Error during renderer.render():", e);
-                 renderer.setAnimationLoop(null); // Detener si falla
+                 renderer.setAnimationLoop(null);
             }
         }
 
         // --- Copiar aquí las definiciones completas de las funciones auxiliares ---
-        // (createTableSurfaceVisualOnly, createCushionsAndFrameVisualsOnly, createAllBallsManualPhysics,
-        //  setupControllers, onSelectStart, onSelectEnd, onWindowResize, shootBallManual)
+        // (createTableSurfaceVisualOnly, createCushionsAndFrameVisualsOnly, createBallsForManualPhysics,
+        //  setupControllers, onSelectStart, onSelectEnd, onWindowResize)
         // Asegúrate de que las definiciones completas de las funciones estén presentes.
 
 
     </script>
 </body>
 </html>
+
 
 
 
