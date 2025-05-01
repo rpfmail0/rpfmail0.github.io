@@ -12,7 +12,7 @@
             right: 20px;
             z-index: 999;
         }
-        /* Estilos para Slider en Esquina Superior Derecha */
+        /* Estilos para Slider Dinámico */
         .dynamic-slider-container {
             position: absolute; /* Se posicionará con JS */
             background-color: rgba(50, 50, 50, 0.8); /* Fondo semitransparente */
@@ -106,7 +106,7 @@
         let controller1, controller2;
         let cueController = null; // Mando para disparar (controller2)
         let cueStickMesh; // Visual del taco
-        let aimLine; // Línea de mira
+        let aimLine; // Línea de mira (opcional, comentada por ahora)
         let isTriggerDown = false;
 
         // Gameplay State
@@ -127,7 +127,7 @@
         const oscillationSpeed = 3.0;
 
         // Constantes de Física Manual
-        const FRICTION = 0.988;
+        const FRICTION = 0.988; // Fricción reducida
         const MIN_VELOCITY_SQ = 0.0001;
         const CUSHION_RESTITUTION = 0.6;
         const BALL_RESTITUTION = 0.9;
@@ -147,7 +147,7 @@
         const MIN_Z = -tableHeight / 2 + ballRadius;
         const MAX_Z = tableHeight / 2 - ballRadius;
 
-        const clock = new THREE.Clock();
+        const clock = new THREE.Clock(); // Para delta time y oscilación
 
         // Variables temporales para cálculos
         const tempVector = new THREE.Vector3();
@@ -159,8 +159,6 @@
         const relativeVelocity = new THREE.Vector3();
         const impulseVec = new THREE.Vector3();
         const correction = new THREE.Vector3();
-        const playerDirection = new THREE.Vector3(); // Para movimiento futuro
-
 
         init();
 
@@ -451,12 +449,12 @@
         // --- Animation Loop (Actualizar Slider y Física Manual) ---
         function animate() {
             const delta = clock.getDelta();
-            const elapsedTime = clock.getElapsedTime();
+            const elapsedTime = clock.getElapsedTime(); // Tiempo total para oscilación
 
             // Actualizar Slider si estamos apuntando
             if (isAiming && dynamicForceSlider && dynamicForceValueSpan) {
-                const oscillation = (Math.sin(elapsedTime * oscillationSpeed) + 1) / 2;
-                currentShotSpeed = minShotSpeed + oscillation * (maxShotSpeed - minShotSpeed);
+                const oscillation = (Math.sin(elapsedTime * oscillationSpeed) + 1) / 2; // 0 a 1
+                currentShotSpeed = minShotSpeed + oscillation * (maxShotSpeed - minShotSpeed); // Mapear a 0-10
                 dynamicForceSlider.value = currentShotSpeed.toString();
                 dynamicForceValueSpan.textContent = currentShotSpeed.toFixed(1);
 
@@ -474,7 +472,7 @@
                     const containerWidth = dynamicSliderContainer.offsetWidth;
                     const containerHeight = dynamicSliderContainer.offsetHeight;
                     screenX = Math.max(10, Math.min(screenX - containerWidth / 2, window.innerWidth - containerWidth - 10));
-                    screenY = Math.max(10, Math.min(screenY - containerHeight, window.innerHeight - containerHeight - 10)); // Ajustar Y para que no tape tanto
+                    screenY = Math.max(10, Math.min(screenY - containerHeight - 20, window.innerHeight - containerHeight - 10)); // Poner encima del mando
 
                     dynamicSliderContainer.style.left = `${screenX}px`;
                     dynamicSliderContainer.style.top = `${screenY}px`;
@@ -488,9 +486,9 @@
                 const velSq = ball.velocity.lengthSq();
                 if (velSq > MIN_VELOCITY_SQ) {
                     allStopped = false;
-                    ball.velocity.multiplyScalar(FRICTION);
+                    ball.velocity.multiplyScalar(FRICTION); // Fricción corregida
                     deltaPos.copy(ball.velocity).multiplyScalar(delta); // Usar delta y vector temporal
-                    ball.mesh.position.add(deltaPos);
+                    ball.mesh.position.add(deltaPos); // Mover malla
                     // Colisiones con Bandas
                     let hitCushion = false;
                     if (ball.mesh.position.x < MIN_X) { ball.mesh.position.x = MIN_X; ball.velocity.x *= -CUSHION_RESTITUTION; hitCushion = true; }
@@ -546,7 +544,7 @@
                  cushionHitsThisStroke = 0;
             }
 
-             // Actualizar Línea de Mira
+            // Actualizar Línea de Mira
             if (cueController && cueStickMesh && aimLine && renderer.xr.isPresenting) {
                  try {
                      // Calcular posición de la punta del taco en COORDENADAS DEL MANDO
@@ -554,7 +552,7 @@
 
                      // Calcular dirección de apuntado en COORDENADAS DEL MANDO (Z negativo)
                      aimDirectionLocal.set(0, 0, -1);
-                     const farPointLocal = aimDirectionLocal.clone().multiplyScalar(5); // 5 metros hacia adelante localmente
+                     farPointLocal.copy(aimDirectionLocal).multiplyScalar(5); // 5 metros hacia adelante localmente
 
                      // Actualizar los puntos de la línea
                      const positions = aimLine.geometry.attributes.position;
