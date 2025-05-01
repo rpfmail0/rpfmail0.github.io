@@ -122,6 +122,20 @@
 
         const clock = new THREE.Clock(); // Usar clock para delta time
 
+        // Variables temporales para cálculos (evitar crear en bucle)
+        const tempVector = new THREE.Vector3();
+        const tipLocalOffset = new THREE.Vector3();
+        const aimDirectionLocal = new THREE.Vector3(0, 0, -1);
+        const farPointLocal = new THREE.Vector3();
+        const deltaPos = new THREE.Vector3();
+        const collisionNormal = new THREE.Vector3();
+        const relativeVelocity = new THREE.Vector3();
+        const impulseVec = new THREE.Vector3();
+        const correction = new THREE.Vector3();
+        const worldDirection = new THREE.Vector3();
+        const rightDirection = new THREE.Vector3();
+
+
         init();
 
         // --- Initialization ---
@@ -312,7 +326,7 @@
                   aimLine = new THREE.Line(aimLineGeometry, aimLineMaterial);
                   aimLine.visible = false; // Empezar invisible
                   controller2.add(aimLine); // Añadir como hija del mando derecho
-                  // console.log("Línea de mira creada y añadida a Controller 2.");
+                  console.log("Línea de mira creada y añadida a Controller 2.");
 
              } else { console.error("¡No se pudo obtener el Controller 2!"); }
              // console.log("Mandos configurados.");
@@ -393,22 +407,24 @@
             // --- Actualizar Línea de Mira ---
             if (cueController && cueStickMesh && aimLine && renderer.xr.isPresenting) {
                 try {
-                    const tipLocalOffset = new THREE.Vector3(0, 0, -cueLength + 0.02); // Ajustar offset
-                    const aimDirectionLocal = new THREE.Vector3(0, 0, -1);
-                    const farPointLocal = aimDirectionLocal.clone().multiplyScalar(5); // Línea más corta (5m)
+                    // Usar una variable temporal global para evitar crear vectores en cada frame
+                    tipLocalOffset.set(0, 0, -cueStickMesh.geometry.parameters.height + 0.02); // Offset desde el centro del cilindro
+                    farPointLocal.copy(aimDirectionLocal).multiplyScalar(5); // Reusar aimDirectionLocal
 
+                    // Actualizar puntos de la geometría de la línea
                     const positions = aimLine.geometry.attributes.position;
                     positions.setXYZ(0, tipLocalOffset.x, tipLocalOffset.y, tipLocalOffset.z);
                     positions.setXYZ(1, farPointLocal.x, farPointLocal.y, farPointLocal.z);
                     positions.needsUpdate = true;
-                    aimLine.geometry.computeBoundingSphere();
-                    aimLine.visible = true;
+                    aimLine.geometry.computeBoundingSphere(); // Necesario para la visibilidad correcta
+
+                    aimLine.visible = true; // Hacerla visible
                 } catch (e) {
                     console.error("Error actualizando línea de mira:", e);
-                    aimLine.visible = false;
+                    aimLine.visible = false; // Ocultar si hay error
                 }
             } else if (aimLine) {
-                aimLine.visible = false;
+                aimLine.visible = false; // Ocultar si no estamos en XR o falta el mando/taco
             }
 
             // --- Actualizar Física Manual ---
@@ -419,8 +435,8 @@
                 if (velSq > MIN_VELOCITY_SQ) {
                     allStopped = false;
                     ball.velocity.multiplyScalar(FRICTION); // Fricción corregida
-                    const deltaPos = ball.velocity.clone().multiplyScalar(delta); // Usar delta
-                    ball.mesh.position.add(deltaPos);
+                    deltaPos.copy(ball.velocity).multiplyScalar(delta); // Usar delta y vector temporal
+                    ball.mesh.position.add(deltaPos); // Mover malla
                     // Colisiones con Bandas
                     let hitCushion = false;
                     if (ball.mesh.position.x < MIN_X) { ball.mesh.position.x = MIN_X; ball.velocity.x *= -CUSHION_RESTITUTION; hitCushion = true; }
@@ -443,18 +459,17 @@
                      const minDist = ballRadius * 2;
                      const minDistSq = minDist * minDist;
                      if (distSq < minDistSq) {
-                         // Lógica simple original
-                         const collisionNormal = ball2.mesh.position.clone().sub(ball1.mesh.position).normalize();
-                         const relativeVelocity = ball2.velocity.clone().sub(ball1.velocity);
+                         collisionNormal.copy(ball2.mesh.position).sub(ball1.mesh.position).normalize(); // Usar vector temporal
+                         relativeVelocity.copy(ball2.velocity).sub(ball1.velocity); // Usar vector temporal
                          const velocityAlongNormal = relativeVelocity.dot(collisionNormal);
                          if (velocityAlongNormal < 0) {
-                             const impulse = (-(1 + BALL_RESTITUTION) * velocityAlongNormal) / 2;
-                             const impulseVec = collisionNormal.clone().multiplyScalar(impulse);
+                             const impulseMagnitude = -(1 + BALL_RESTITUTION) * velocityAlongNormal / 2;
+                             impulseVec.copy(collisionNormal).multiplyScalar(impulseMagnitude); // Usar vector temporal
                              ball1.velocity.add(impulseVec);
                              ball2.velocity.sub(impulseVec);
                              if (isStrokeInProgress) { /* ... (registrar golpes) ... */ }
                              const overlap = minDist - Math.sqrt(distSq);
-                             const correction = collisionNormal.clone().multiplyScalar(overlap * 0.51);
+                             correction.copy(collisionNormal).multiplyScalar(overlap * 0.51); // Usar vector temporal
                              ball1.mesh.position.sub(correction);
                              ball2.mesh.position.add(correction);
                          }
@@ -486,3 +501,13 @@
     </script>
 </body>
 </html>
+```
+
+**Cambios Realizados:**
+
+1.  **Variables Temporales:** Se han añadido varias variables `THREE.Vector3` globales (`tempVector`, `tipLocalOffset`, etc.) para reutilizarlas dentro del bucle `animate` y evitar crear nuevos vectores en cada frame, lo cual es más eficiente.
+2.  **`animate` Modificado:**
+    * Se ha optimizado la lógica de actualización de la línea de mira y la física manual para usar estas variables temporales (usando `.copy()`, `.set()`, etc. en lugar de `new THREE.Vector3()` dentro del bucle).
+    * Se ha corregido el cálculo de `tipLocalOffset` para la línea de mira, usando la altura del cilindro del taco.
+
+Prueba esta versión. Debería funcionar igual que la anterior, pero con pequeñas optimizaciones internas. Confirma si ves todo y si la línea de mira aparece correctamen
