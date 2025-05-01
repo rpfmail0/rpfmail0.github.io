@@ -461,19 +461,24 @@
             let ry = 0; // Rotación Y
             const deadzone = 0.1; // Zona muerta para joysticks
 
-            // console.log("handleControllerInput llamado"); // Log para ver si entra
+            // ***** Log para confirmar llamada *****
+            // console.log("handleControllerInput llamado");
 
             // --- Movimiento (Mando Izquierdo - controller1) ---
             if (moveController) {
-                if (moveController.gamepad) { // Comprobar si el gamepad está listo
+                if (moveController.gamepad) {
                     const axes = moveController.gamepad.axes;
                     // ***** Loguear SIEMPRE los ejes del mando izquierdo *****
-                    console.log(`DEBUG Mando Izq (Move): Axes = [${axes.map(a => a?.toFixed(2) ?? 'N/A').join(', ')}]`);
+                    if (axes && axes.length >= 4) { // Asegurarse de que axes existe y tiene longitud
+                        console.log(`DEBUG Mando Izq (Move): Axes = [${axes[0]?.toFixed(2)}, ${axes[1]?.toFixed(2)}, ${axes[2]?.toFixed(2)}, ${axes[3]?.toFixed(2)}]`);
+                    } else {
+                        console.log("DEBUG Mando Izq (Move): Axes array no válido o incompleto.");
+                    }
                     // *******************************************************
 
                     // Leer ejes (asumiendo 2=X, 3=Y) - AJUSTAR SEGÚN LOGS
-                    const joystickX = axes[2] || 0;
-                    const joystickY = axes[3] || 0; // Negativo es hacia adelante
+                    const joystickX = axes && axes.length > 2 ? axes[2] : 0;
+                    const joystickY = axes && axes.length > 3 ? axes[3] : 0; // Negativo es hacia adelante
 
                     // Aplicar zona muerta para el movimiento real
                     if (Math.abs(joystickX) > deadzone) {
@@ -483,28 +488,32 @@
                         dz = joystickY;
                     }
                 } else {
-                     // Log si el mando existe pero el gamepad no está listo
-                     // console.log("Mando Izq (Move): Gamepad no disponible aún.");
+                     // ***** Log si el gamepad no está disponible *****
+                     console.log("DEBUG Mando Izq (Move): Gamepad no disponible.");
                 }
             }
 
             // --- Rotación (Mando Derecho - controller2) ---
              if (rotateController) {
-                 if (rotateController.gamepad) { // Comprobar si el gamepad está listo
+                 if (rotateController.gamepad) {
                      const axes = rotateController.gamepad.axes;
                      // ***** Loguear SIEMPRE los ejes del mando derecho *****
-                     console.log(`DEBUG Mando Der (Rotate): Axes = [${axes.map(a => a?.toFixed(2) ?? 'N/A').join(', ')}]`);
+                     if (axes && axes.length >= 3) { // Asegurar que axes existe y tiene longitud
+                        console.log(`DEBUG Mando Der (Rotate): Axes = [${axes[0]?.toFixed(2)}, ${axes[1]?.toFixed(2)}, ${axes[2]?.toFixed(2)}, ${axes[3]?.toFixed(2) ?? 'N/A'}]`);
+                     } else {
+                        console.log("DEBUG Mando Der (Rotate): Axes array no válido o incompleto.");
+                     }
                      // *******************************************************
 
                      // Usar eje X (índice 2) del joystick derecho para rotar - AJUSTAR SEGÚN LOGS
-                     const joystickX = axes[2] || 0;
+                     const joystickX = axes && axes.length > 2 ? axes[2] : 0;
                      // Aplicar zona muerta para la rotación real
-                     if (Math.abs(joystickX) > deadzone + 0.05) { // Umbral un poco mayor para rotación
+                     if (Math.abs(joystickX) > deadzone + 0.05) {
                          ry = -joystickX;
                      }
                  } else {
-                      // Log si el mando existe pero el gamepad no está listo
-                      // console.log("Mando Der (Rotate): Gamepad no disponible aún.");
+                      // ***** Log si el gamepad no está disponible *****
+                      console.log("DEBUG Mando Der (Rotate): Gamepad no disponible.");
                  }
              }
 
@@ -517,14 +526,14 @@
 
                 // Movimiento
                 if (dx !== 0 || dz !== 0) {
-                    playerGroup.getWorldDirection(worldDirection); // Z negativo local del grupo
+                    playerGroup.getWorldDirection(worldDirection);
                     worldDirection.y = 0;
                     worldDirection.normalize();
-                    rightDirection.crossVectors(playerGroup.up, worldDirection).normalize(); // X positivo local del grupo
+                    rightDirection.crossVectors(playerGroup.up, worldDirection).normalize();
                     playerDirection.set(0, 0, 0);
                     playerDirection.add(worldDirection.multiplyScalar(dz));
                     playerDirection.add(rightDirection.multiplyScalar(dx));
-                    const moveDistance = moveSpeed * delta; // Usar delta (timeStep)
+                    const moveDistance = moveSpeed * delta;
                     const moveVector = playerDirection.multiplyScalar(moveDistance);
                     playerGroup.position.add(moveVector);
                 }
@@ -670,4 +679,3 @@
     </script>
 </body>
 </html>
-
