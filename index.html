@@ -2,7 +2,8 @@
 <html lang="es">
 <head>
     <meta charset="utf-8">
-    <title>WebXR Billar - Física Manual + Movimiento + Slider 3D</title> <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>WebXR Billar - Física Manual + Movimiento + Slider 3D</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
     <style>
         body { margin: 0; overflow: hidden; font-family: monospace; background-color: #000; }
         canvas { display: block; }
@@ -57,13 +58,12 @@
         const balls = []; // Array para { mesh, velocity, name }
         let cueBall; // Referencia a la bola blanca
 
-        // ***** Player Rig y Controles *****
-        let playerGroup; // Grupo que representa al jugador (cámara + mandos) - AHORA SE USA
-        const playerDirection = new THREE.Vector3(); // Dirección de movimiento calculada
-        const moveSpeed = 1.5; // Velocidad de movimiento (metros/segundo)
-        const rotateSpeed = 1.5; // Velocidad de rotación (radianes/segundo)
-        // const clock = new THREE.Clock(); // Eliminado según solicitud
-        // ***************************************
+        // Player Rig y Controles
+        let playerGroup;
+        const playerDirection = new THREE.Vector3();
+        const moveSpeed = 1.5;
+        const rotateSpeed = 1.5;
+        const clock = new THREE.Clock(); // Necesario para oscilación slider
 
         // WebXR Controller Variables
         let controller1, controller2; // Mandos (0=izq, 1=der)
@@ -108,6 +108,9 @@
         const MIN_VELOCITY_SQ = 0.0001;
         const CUSHION_RESTITUTION = 0.6;
         const BALL_RESTITUTION = 0.9;
+        // ***** CORRECCIÓN: Definir ENERGY_LOSS_FACTOR *****
+        const ENERGY_LOSS_FACTOR = Math.sqrt(0.95); // sqrt(1 - 0.05) para pérdida del 5%
+        // ***********************************************
 
         // Constantes de la mesa y bolas
         const ballRadius = 0.03075;
@@ -150,14 +153,12 @@
 
         // --- Initialization ---
         function init() {
-            console.log("Iniciando escena WebXR Billar (Física Manual + Movimiento)...");
+            console.log("Iniciando escena WebXR Billar (Física Manual + Movimiento + Slider 3D - Corregido)...");
 
             scene = new THREE.Scene();
 
             // Cámara: Se añadirá al playerGroup
             camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 100);
-            // Posición relativa al playerGroup
-            // camera.position.set(0, 1.6, 0); // Ajustar altura de ojos si es necesario
 
             renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
             renderer.setSize(window.innerWidth, window.innerHeight);
@@ -176,7 +177,7 @@
             hemiLight.position.set( 0, 5, 0 );
             scene.add( hemiLight );
             const spotLight = new THREE.SpotLight(0xffffff, 2.5, 10, Math.PI / 4, 0.3, 1.8);
-            spotLight.position.set(0.5, tableSurfaceY + 3, -1); // Posición relativa al mundo
+            spotLight.position.set(0.5, tableSurfaceY + 3, -1);
             spotLight.castShadow = true;
             spotLight.shadow.mapSize.width = 2048;
             spotLight.shadow.mapSize.height = 2048;
@@ -188,15 +189,13 @@
 
             // --- Player Rig ---
             playerGroup = new THREE.Group();
-            // Posición inicial del jugador en el mundo
-            playerGroup.position.set(0, 1.6, tableSurfaceY + 1.0); // Empezar a 1.6m de altura, 1m DELANTE de la mesa (Z positivo)
+            playerGroup.position.set(0, 1.6, tableSurfaceY + 1.0);
             scene.add(playerGroup);
             playerGroup.add(camera); // Añadir cámara al rig
             console.log("Player group creado y añadido a la escena.");
 
             // --- Crear Grupo de la Mesa ---
             tableGroup = new THREE.Group();
-            // Posición de la mesa relativa al mundo (fija)
             tableGroup.position.set(0, tableSurfaceY, -1.5);
             scene.add(tableGroup);
 
@@ -311,10 +310,8 @@
              if (controller1) {
                   controller1.addEventListener('selectstart', onSelectStart);
                   controller1.addEventListener('selectend', onSelectEnd);
-                  // ***** CAMBIO: Añadir mando al playerGroup *****
-                  playerGroup.add(controller1);
-                  moveController = controller1; // Asignar rol de movimiento
-                  // Añadir línea visual
+                  playerGroup.add(controller1); // Añadir al playerGroup
+                  moveController = controller1;
                   const lineMaterial = new THREE.LineBasicMaterial({ color: 0xcccccc });
                   const lineGeometry = new THREE.BufferGeometry().setFromPoints([ new THREE.Vector3(0, 0, 0), new THREE.Vector3(0, 0, -0.2) ]);
                   const line1 = new THREE.Line(lineGeometry, lineMaterial);
@@ -327,11 +324,10 @@
              if (controller2) {
                   controller2.addEventListener('selectstart', onSelectStart);
                   controller2.addEventListener('selectend', onSelectEnd);
-                  // ***** CAMBIO: Añadir mando al playerGroup *****
-                  playerGroup.add(controller2);
-                  cueController = controller2; // Asignar rol de disparo
-                  rotateController = controller2; // Asignar rol de rotación
-                  // Añadir taco visual
+                  playerGroup.add(controller2); // Añadir al playerGroup
+                  cueController = controller2;
+                  rotateController = controller2;
+                  // Taco
                   const cueLength = 1.2;
                   const cueRadius = 0.01;
                   const cueGeometry = new THREE.CylinderGeometry(cueRadius, cueRadius * 0.8, cueLength, 16);
@@ -463,7 +459,7 @@
             } catch (e) { console.error("Error al disparar sonido Tone.js:", e); }
         }
 
-        // ***** NUEVO: Función para manejar Input de Mandos *****
+        // --- Función para manejar Input de Mandos ---
         function handleControllerInput(delta) { // delta ahora es timeStep fijo
             let dx = 0; // Movimiento lateral (strafe)
             let dz = 0; // Movimiento adelante/atrás
@@ -518,11 +514,9 @@
                 }
             }
         }
-        // ***************************************************
 
         // --- Animation Loop (FÍSICA MANUAL + SLIDER + SONIDO + COLISIÓN MEJORADA + MOVIMIENTO) ---
         function animate() {
-            // const delta = clock.getDelta(); // Eliminado
             const elapsedTime = performance.now() / 1000; // Tiempo para oscilación
 
             // --- Manejar Input de Mandos ---
@@ -659,3 +653,4 @@
     </script>
 </body>
 </html>
+
