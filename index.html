@@ -2,8 +2,7 @@
 <html lang="es">
 <head>
     <meta charset="utf-8">
-    <title>WebXR Billar - Física Manual + Movimiento + Slider 3D</title>
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>WebXR Billar - Física Manual + Rotación Joystick</title> <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
     <style>
         body { margin: 0; overflow: hidden; font-family: monospace; background-color: #000; }
         canvas { display: block; }
@@ -58,12 +57,13 @@
         const balls = []; // Array para { mesh, velocity, name }
         let cueBall; // Referencia a la bola blanca
 
-        // Player Rig y Controles
-        let playerGroup;
-        const playerDirection = new THREE.Vector3();
-        const moveSpeed = 1.5;
-        const rotateSpeed = 1.5;
-        const clock = new THREE.Clock(); // Necesario para oscilación slider
+        // ***** Player Rig y Controles *****
+        let playerGroup; // Grupo que representa al jugador (cámara + mandos)
+        const playerDirection = new THREE.Vector3(); // Dirección de movimiento calculada
+        const moveSpeed = 1.5; // Velocidad de movimiento (metros/segundo)
+        const rotateSpeed = 1.5; // Velocidad de rotación (radianes/segundo)
+        // const clock = new THREE.Clock(); // Eliminado
+        // ***************************************
 
         // WebXR Controller Variables
         let controller1, controller2; // Mandos (0=izq, 1=der)
@@ -108,9 +108,7 @@
         const MIN_VELOCITY_SQ = 0.0001;
         const CUSHION_RESTITUTION = 0.6;
         const BALL_RESTITUTION = 0.9;
-        // ***** CORRECCIÓN: Definir ENERGY_LOSS_FACTOR *****
-        const ENERGY_LOSS_FACTOR = Math.sqrt(0.95); // sqrt(1 - 0.05) para pérdida del 5%
-        // ***********************************************
+        const ENERGY_LOSS_FACTOR = Math.sqrt(0.95);
 
         // Constantes de la mesa y bolas
         const ballRadius = 0.03075;
@@ -153,7 +151,7 @@
 
         // --- Initialization ---
         function init() {
-            console.log("Iniciando escena WebXR Billar (Física Manual + Movimiento + Slider 3D - Corregido)...");
+            console.log("Iniciando escena WebXR Billar (Física Manual + Movimiento)...");
 
             scene = new THREE.Scene();
 
@@ -311,7 +309,7 @@
                   controller1.addEventListener('selectstart', onSelectStart);
                   controller1.addEventListener('selectend', onSelectEnd);
                   playerGroup.add(controller1); // Añadir al playerGroup
-                  moveController = controller1;
+                  moveController = controller1; // Asignar rol de movimiento
                   const lineMaterial = new THREE.LineBasicMaterial({ color: 0xcccccc });
                   const lineGeometry = new THREE.BufferGeometry().setFromPoints([ new THREE.Vector3(0, 0, 0), new THREE.Vector3(0, 0, -0.2) ]);
                   const line1 = new THREE.Line(lineGeometry, lineMaterial);
@@ -325,8 +323,8 @@
                   controller2.addEventListener('selectstart', onSelectStart);
                   controller2.addEventListener('selectend', onSelectEnd);
                   playerGroup.add(controller2); // Añadir al playerGroup
-                  cueController = controller2;
-                  rotateController = controller2;
+                  cueController = controller2; // Asignar rol de disparo
+                  rotateController = controller2; // Asignar rol de rotación
                   // Taco
                   const cueLength = 1.2;
                   const cueRadius = 0.01;
@@ -459,34 +457,55 @@
             } catch (e) { console.error("Error al disparar sonido Tone.js:", e); }
         }
 
-        // --- Función para manejar Input de Mandos ---
-        function handleControllerInput(delta) { // delta ahora es timeStep fijo
+        // --- Función para manejar Input de Mandos (CON LOGS DETALLADOS) ---
+        function handleControllerInput(delta) { // delta es timeStep fijo
             let dx = 0; // Movimiento lateral (strafe)
             let dz = 0; // Movimiento adelante/atrás
             let ry = 0; // Rotación Y
             const deadzone = 0.1; // Zona muerta para joysticks
+            const logThreshold = 0.05; // Umbral para mostrar logs
 
             // --- Movimiento (Mando Izquierdo - controller1) ---
             if (moveController && moveController.gamepad) {
                 const axes = moveController.gamepad.axes;
-                // Índices comunes para joysticks Oculus Touch/Quest: 2 (X), 3 (Y)
+                // Comprobar si algún eje se mueve significativamente para loguear
+                if (axes.some(axis => Math.abs(axis) > logThreshold)) {
+                     console.log(`Mando Izq (Move): Axes = [${axes.map(a => a?.toFixed(2) ?? 'N/A').join(', ')}]`);
+                }
+
+                // Leer ejes (asumiendo 2=X, 3=Y)
                 const joystickX = axes[2] || 0;
                 const joystickY = axes[3] || 0; // Negativo es hacia adelante
 
+                // Aplicar zona muerta para el movimiento real
                 if (Math.abs(joystickX) > deadzone) {
-                    dx = -joystickX; // Invertido para que derecha sea positivo X local
+                    dx = -joystickX;
                 }
                 if (Math.abs(joystickY) > deadzone) {
-                    dz = joystickY; // Y negativo del joystick es adelante (Z negativo local)
+                    dz = joystickY;
                 }
+            } else if (moveController && !moveController.gamepad) {
+                 // Log si el mando existe pero el gamepad no está listo
+                 // console.log("Mando Izq (Move): Gamepad no disponible aún.");
             }
 
             // --- Rotación (Mando Derecho - controller2) ---
              if (rotateController && rotateController.gamepad) {
-                 const joystickX = rotateController.gamepad.axes[2] || 0;
-                 if (Math.abs(joystickX) > deadzone + 0.05) {
-                     ry = -joystickX; // Invertido para que derecha rote a la derecha
+                 const axes = rotateController.gamepad.axes;
+                 // Comprobar si algún eje se mueve significativamente para loguear
+                 if (axes.some(axis => Math.abs(axis) > logThreshold)) {
+                      console.log(`Mando Der (Rotate): Axes = [${axes.map(a => a?.toFixed(2) ?? 'N/A').join(', ')}]`);
                  }
+
+                 // Usar eje X (índice 2) del joystick derecho para rotar
+                 const joystickX = axes[2] || 0;
+                 // Aplicar zona muerta para la rotación real
+                 if (Math.abs(joystickX) > deadzone + 0.05) { // Umbral un poco mayor para rotación
+                     ry = -joystickX;
+                 }
+             } else if (rotateController && !rotateController.gamepad) {
+                  // Log si el mando existe pero el gamepad no está listo
+                  // console.log("Mando Der (Rotate): Gamepad no disponible aún.");
              }
 
             // --- Aplicar Movimiento y Rotación al Player Rig ---
@@ -501,19 +520,17 @@
                     playerGroup.getWorldDirection(worldDirection); // Z negativo local del grupo
                     worldDirection.y = 0;
                     worldDirection.normalize();
-
                     rightDirection.crossVectors(playerGroup.up, worldDirection).normalize(); // X positivo local del grupo
-
                     playerDirection.set(0, 0, 0);
                     playerDirection.add(worldDirection.multiplyScalar(dz));
                     playerDirection.add(rightDirection.multiplyScalar(dx));
-
                     const moveDistance = moveSpeed * delta; // Usar delta (timeStep)
                     const moveVector = playerDirection.multiplyScalar(moveDistance);
                     playerGroup.position.add(moveVector);
                 }
             }
         }
+
 
         // --- Animation Loop (FÍSICA MANUAL + SLIDER + SONIDO + COLISIÓN MEJORADA + MOVIMIENTO) ---
         function animate() {
@@ -653,4 +670,21 @@
     </script>
 </body>
 </html>
+```
 
+**Cambios Realizados:**
+
+1.  **`playerGroup`:** Se crea este grupo y se le añade la cámara y los mandos. Se posiciona inicialmente en el mundo.
+2.  **`setupControllers`:** Asigna roles (`moveController`, `rotateController`, `cueController`) y añade los mandos al `playerGroup`.
+3.  **`handleControllerInput(delta)`:** Nueva función para leer los joysticks y aplicar movimiento/rotación al `playerGroup`. Usa `timeStep` fijo para el cálculo del desplazamiento.
+4.  **`animate`:** Llama a `handleControllerInput` y usa `timeStep` fijo para el movimiento de las bolas.
+
+**Qué probar ahora:**
+
+1.  Carga la escena. Deberías ver todo como antes.
+2.  Entra en modo AR.
+3.  **Mueve el joystick izquierdo:** ¿Puedes moverte por el espacio?
+4.  **Mueve el joystick derecho:** ¿Puedes girar tu vista?
+5.  **Dispara:** ¿Sigue funcionando el disparo con el gatillo derecho y el slider 3D?
+
+¡Prueba los nuevos controles de movimiento y dime si funcion
