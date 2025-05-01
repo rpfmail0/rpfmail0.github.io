@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
     <meta charset="utf-8">
-    <title>WebXR Billar - Física Manual + Rotación Joystick</title> <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>WebXR Billar - Debug Joystick Axes</title> <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
     <style>
         body { margin: 0; overflow: hidden; font-family: monospace; background-color: #000; }
         canvas { display: block; }
@@ -57,13 +57,12 @@
         const balls = []; // Array para { mesh, velocity, name }
         let cueBall; // Referencia a la bola blanca
 
-        // ***** Player Rig y Controles *****
-        let playerGroup; // Grupo que representa al jugador (cámara + mandos)
-        const playerDirection = new THREE.Vector3(); // Dirección de movimiento calculada
-        const moveSpeed = 1.5; // Velocidad de movimiento (metros/segundo)
-        const rotateSpeed = 1.5; // Velocidad de rotación (radianes/segundo)
+        // Player Rig y Controles
+        let playerGroup;
+        const playerDirection = new THREE.Vector3();
+        const moveSpeed = 1.5;
+        const rotateSpeed = 1.5;
         // const clock = new THREE.Clock(); // Eliminado
-        // ***************************************
 
         // WebXR Controller Variables
         let controller1, controller2; // Mandos (0=izq, 1=der)
@@ -151,11 +150,9 @@
 
         // --- Initialization ---
         function init() {
-            console.log("Iniciando escena WebXR Billar (Física Manual + Movimiento)...");
+            console.log("Iniciando escena WebXR Billar (Debug Joystick Axes)..."); // Log actualizado
 
             scene = new THREE.Scene();
-
-            // Cámara: Se añadirá al playerGroup
             camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 100);
 
             renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
@@ -205,7 +202,7 @@
             createBallsManualPhysics(tableGroup);
 
             // --- Configurar Mandos (Visual y asignación de roles) ---
-            setupControllers(); // Ahora también asigna move/rotate controllers
+            setupControllers();
 
             // --- Crear Slider 3D --- (Se hace dentro de setupControllers)
 
@@ -463,49 +460,52 @@
             let dz = 0; // Movimiento adelante/atrás
             let ry = 0; // Rotación Y
             const deadzone = 0.1; // Zona muerta para joysticks
-            const logThreshold = 0.05; // Umbral para mostrar logs
+
+            // console.log("handleControllerInput llamado"); // Log para ver si entra
 
             // --- Movimiento (Mando Izquierdo - controller1) ---
-            if (moveController && moveController.gamepad) {
-                const axes = moveController.gamepad.axes;
-                // Comprobar si algún eje se mueve significativamente para loguear
-                if (axes.some(axis => Math.abs(axis) > logThreshold)) {
-                     console.log(`Mando Izq (Move): Axes = [${axes.map(a => a?.toFixed(2) ?? 'N/A').join(', ')}]`);
-                }
+            if (moveController) { // Comprobar si el mando existe
+                if (moveController.gamepad) { // Comprobar si el gamepad está listo
+                    const axes = moveController.gamepad.axes;
+                    // ***** Loguear SIEMPRE los ejes del mando izquierdo *****
+                    console.log(`Mando Izq (Move): Axes = [${axes.map(a => a?.toFixed(2) ?? 'N/A').join(', ')}]`);
+                    // *******************************************************
 
-                // Leer ejes (asumiendo 2=X, 3=Y)
-                const joystickX = axes[2] || 0;
-                const joystickY = axes[3] || 0; // Negativo es hacia adelante
+                    // Leer ejes (asumiendo 2=X, 3=Y) - AJUSTAR SEGÚN LOGS
+                    const joystickX = axes[2] || 0;
+                    const joystickY = axes[3] || 0; // Negativo es hacia adelante
 
-                // Aplicar zona muerta para el movimiento real
-                if (Math.abs(joystickX) > deadzone) {
-                    dx = -joystickX;
+                    // Aplicar zona muerta para el movimiento real
+                    if (Math.abs(joystickX) > deadzone) {
+                        dx = -joystickX;
+                    }
+                    if (Math.abs(joystickY) > deadzone) {
+                        dz = joystickY;
+                    }
+                } else {
+                     // Log si el mando existe pero el gamepad no está listo
+                     // console.log("Mando Izq (Move): Gamepad no disponible aún.");
                 }
-                if (Math.abs(joystickY) > deadzone) {
-                    dz = joystickY;
-                }
-            } else if (moveController && !moveController.gamepad) {
-                 // Log si el mando existe pero el gamepad no está listo
-                 // console.log("Mando Izq (Move): Gamepad no disponible aún.");
             }
 
             // --- Rotación (Mando Derecho - controller2) ---
-             if (rotateController && rotateController.gamepad) {
-                 const axes = rotateController.gamepad.axes;
-                 // Comprobar si algún eje se mueve significativamente para loguear
-                 if (axes.some(axis => Math.abs(axis) > logThreshold)) {
-                      console.log(`Mando Der (Rotate): Axes = [${axes.map(a => a?.toFixed(2) ?? 'N/A').join(', ')}]`);
-                 }
+             if (rotateController) { // Comprobar si el mando existe
+                 if (rotateController.gamepad) { // Comprobar si el gamepad está listo
+                     const axes = rotateController.gamepad.axes;
+                     // ***** Loguear SIEMPRE los ejes del mando derecho *****
+                     console.log(`Mando Der (Rotate): Axes = [${axes.map(a => a?.toFixed(2) ?? 'N/A').join(', ')}]`);
+                     // *******************************************************
 
-                 // Usar eje X (índice 2) del joystick derecho para rotar
-                 const joystickX = axes[2] || 0;
-                 // Aplicar zona muerta para la rotación real
-                 if (Math.abs(joystickX) > deadzone + 0.05) { // Umbral un poco mayor para rotación
-                     ry = -joystickX;
+                     // Usar eje X (índice 2) del joystick derecho para rotar - AJUSTAR SEGÚN LOGS
+                     const joystickX = axes[2] || 0;
+                     // Aplicar zona muerta para la rotación real
+                     if (Math.abs(joystickX) > deadzone + 0.05) { // Umbral un poco mayor para rotación
+                         ry = -joystickX;
+                     }
+                 } else {
+                      // Log si el mando existe pero el gamepad no está listo
+                      // console.log("Mando Der (Rotate): Gamepad no disponible aún.");
                  }
-             } else if (rotateController && !rotateController.gamepad) {
-                  // Log si el mando existe pero el gamepad no está listo
-                  // console.log("Mando Der (Rotate): Gamepad no disponible aún.");
              }
 
             // --- Aplicar Movimiento y Rotación al Player Rig ---
@@ -670,21 +670,3 @@
     </script>
 </body>
 </html>
-```
-
-**Cambios Realizados:**
-
-1.  **`playerGroup`:** Se crea este grupo y se le añade la cámara y los mandos. Se posiciona inicialmente en el mundo.
-2.  **`setupControllers`:** Asigna roles (`moveController`, `rotateController`, `cueController`) y añade los mandos al `playerGroup`.
-3.  **`handleControllerInput(delta)`:** Nueva función para leer los joysticks y aplicar movimiento/rotación al `playerGroup`. Usa `timeStep` fijo para el cálculo del desplazamiento.
-4.  **`animate`:** Llama a `handleControllerInput` y usa `timeStep` fijo para el movimiento de las bolas.
-
-**Qué probar ahora:**
-
-1.  Carga la escena. Deberías ver todo como antes.
-2.  Entra en modo AR.
-3.  **Mueve el joystick izquierdo:** ¿Puedes moverte por el espacio?
-4.  **Mueve el joystick derecho:** ¿Puedes girar tu vista?
-5.  **Dispara:** ¿Sigue funcionando el disparo con el gatillo derecho y el slider 3D?
-
-¡Prueba los nuevos controles de movimiento y dime si funcion
