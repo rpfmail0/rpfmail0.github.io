@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
     <meta charset="utf-8">
-    <title>WebXR Billar - Física Manual Corregida</title> <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>WebXR Billar - Física Manual Corregida v2</title> <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
     <style>
         body { margin: 0; overflow: hidden; font-family: monospace; background-color: #000; }
         canvas { display: block; }
@@ -28,19 +28,19 @@
         import * as THREE from 'three';
         import { ARButton } from 'three/addons/webxr/ARButton.js';
 
-        // --- Variables Globales ---
+        // --- Global Variables ---
         let camera, scene, renderer;
-        let tableGroup; // Contenedor de la mesa
+        let tableGroup; // Contenedor
         const balls = []; // Array para { mesh, velocity, name }
         let cueBall; // Referencia a la bola blanca
 
-        // Variables de Controlador WebXR
+        // WebXR Controller Variables
         let controller1, controller2;
-        let cueController = null; // Mando para disparar (controller2)
+        let cueController = null; // Se asignará al controller2
         let cueStickMesh; // Visual del taco
         let isTriggerDown = false;
 
-        // Estado del Juego
+        // Gameplay State
         let score = 0;
         let isStrokeInProgress = false;
         let hitYellowAfterStrokeStart = false;
@@ -48,10 +48,10 @@
         let cushionHitsThisStroke = 0;
 
         // Constantes de Física Manual
-        // ***** CAMBIO: Fricción reducida *****
-        const FRICTION = 0.988; // Factor de fricción (más cercano a 1 = menos fricción)
-        const MIN_VELOCITY_SQ = 0.0001; // Velocidad^2 por debajo de la cual se considera parada
-        const CUSHION_RESTITUTION = 0.6; // Rebote de la banda (0 a 1)
+        // ***** CORRECCIONES APLICADAS *****
+        const FRICTION = 0.988; // Fricción reducida
+        const MIN_VELOCITY_SQ = 0.0001;
+        const CUSHION_RESTITUTION = 0.6;
         const BALL_RESTITUTION = 0.9; // Rebote bola-bola (usado en colisión simple)
 
         // Constantes de la mesa y bolas
@@ -73,9 +73,9 @@
 
         init();
 
-        // --- Inicialización ---
+        // --- Initialization ---
         function init() {
-            console.log("Iniciando escena WebXR Billar (Física Manual - Correcciones Finales)..."); // Log actualizado
+            console.log("Iniciando escena WebXR Billar (Física Manual - Correcciones Finales v2)..."); // Log actualizado
 
             scene = new THREE.Scene();
             camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 100);
@@ -109,6 +109,8 @@
             scene.add(spotLight);
             scene.add(camera);
 
+            // --- NO hay mundo físico de Cannon.js ---
+
             // --- Crear Grupo de la Mesa ---
             tableGroup = new THREE.Group();
             tableGroup.position.set(0, tableSurfaceY, -1.5);
@@ -129,7 +131,7 @@
 
             // --- Start Animation Loop ---
             renderer.setAnimationLoop(animate);
-            console.log("Inicialización completa (Física Manual - Correcciones Finales).");
+            console.log("Inicialización completa (Física Manual - Correcciones Finales v2).");
         }
 
         // --- Función para crear solo la superficie visual ---
@@ -343,8 +345,8 @@
                          const relativeVelocity = ball2.velocity.clone().sub(ball1.velocity);
                          const velocityAlongNormal = relativeVelocity.dot(collisionNormal);
                          if (velocityAlongNormal < 0) {
-                             const impulseMagnitude = -(1 + BALL_RESTITUTION) * velocityAlongNormal / 2;
-                             const impulseVec = collisionNormal.clone().multiplyScalar(impulseMagnitude);
+                             const impulse = (-(1 + BALL_RESTITUTION) * velocityAlongNormal) / 2;
+                             const impulseVec = collisionNormal.clone().multiplyScalar(impulse);
 
                              ball1.velocity.add(impulseVec);
                              ball2.velocity.sub(impulseVec);
@@ -396,3 +398,7 @@
     </script>
 </body>
 </html>
+
+```
+
+Por favor, prueba esta versión y confirma que funciona como se espera. Si es así, podemos intentar añadir los sonidos o el movimiento de la escena a continuaci
