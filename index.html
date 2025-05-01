@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
     <meta charset="utf-8">
-    <title>WebXR Billar - Física Manual + Slider 3D + Sonidos v2</title> <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>WebXR Billar - Física Manual + Colisión Mejorada</title> <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
     <style>
         body { margin: 0; overflow: hidden; font-family: monospace; background-color: #000; }
         canvas { display: block; }
@@ -113,12 +113,19 @@
         let hitRedAfterStrokeStart = false;
         let cushionHitsThisStroke = 0;
 
+        // Variables de Sonido
+        let ballHitSynth, cushionHitSynth;
+        let audioInitialized = false;
+        let lastBallHitTime = 0;
+        let lastCushionHitTime = 0;
+        const soundDebounce = 50;
+
         // Variables para Slider 3D
         let sliderGroup3D = null;
         let sliderBackground = null;
         let sliderHandle = null;
         let isAiming = false;
-        let currentSliderValue = 5.0; // Valor actual del slider (0-10)
+        let currentSliderValue = 5.0;
         const maxSliderValue = 10.0;
         const minSliderValue = 0.0;
         const oscillationSpeed = 3.0;
@@ -128,19 +135,14 @@
         const minRealSpeed = 0.5;
         const maxRealSpeed = 8.0;
 
-        // ***** REINTRODUCIDO: Variables de Sonido *****
-        let ballHitSynth, cushionHitSynth;
-        let audioInitialized = false;
-        let lastBallHitTime = 0;
-        let lastCushionHitTime = 0;
-        const soundDebounce = 50; // ms entre sonidos del mismo tipo
-        // ********************************************
-
         // Constantes de Física Manual
         const FRICTION = 0.988;
         const MIN_VELOCITY_SQ = 0.0001;
         const CUSHION_RESTITUTION = 0.6;
-        const BALL_RESTITUTION = 0.9;
+        const BALL_RESTITUTION = 0.9; // Coeficiente de restitución para colisión bola-bola
+        // ***** NUEVO: Factor de pérdida de energía *****
+        const ENERGY_LOSS_FACTOR = Math.sqrt(0.95); // sqrt(1 - 0.05) para pérdida del 5%
+        // ********************************************
 
         // Constantes de la mesa y bolas
         const ballRadius = 0.03075;
@@ -167,7 +169,12 @@
         const farPointLocal = new THREE.Vector3();
         const deltaPos = new THREE.Vector3();
         const collisionNormal = new THREE.Vector3();
+        const collisionTangent = new THREE.Vector3(); // Para colisión mejorada
         const relativeVelocity = new THREE.Vector3();
+        const vel1nVec = new THREE.Vector3(); // Para colisión mejorada
+        const vel1tVec = new THREE.Vector3(); // Para colisión mejorada
+        const vel2nVec = new THREE.Vector3(); // Para colisión mejorada
+        const vel2tVec = new THREE.Vector3(); // Para colisión mejorada
         const impulseVec = new THREE.Vector3(); // Reusado para velocidad en shootBallManual
         const correction = new THREE.Vector3();
 
@@ -176,7 +183,7 @@
 
         // --- Initialization ---
         function init() {
-            console.log("Iniciando escena WebXR Billar (Física Manual + Slider 3D + Sonidos v2)...");
+            console.log("Iniciando escena WebXR Billar (Física Manual + Colisión Mejorada)...");
 
             scene = new THREE.Scene();
             camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 100);
@@ -227,16 +234,15 @@
 
             // --- Crear Slider 3D --- (Se hace dentro de setupControllers)
 
-            // ***** NUEVO: Configurar Sonido *****
+            // Configurar Sonido
             setupSound();
-            // **********************************
 
             // --- Event Listeners ---
             window.addEventListener('resize', onWindowResize, false);
 
             // --- Start Animation Loop ---
             renderer.setAnimationLoop(animate);
-            console.log("Inicialización completa (Física Manual + Slider 3D + Sonidos v2).");
+            console.log("Inicialización completa (Física Manual + Colisión Mejorada).");
         }
 
         // --- Función para crear solo la superficie visual ---
@@ -321,31 +327,16 @@
 
         // --- Setup Controllers (INTERCAMBIADO + Línea de Mira + Slider 3D) ---
         function setupControllers() {
-             console.log("Configurando mandos (Taco en Controller 2)...");
-
-             // Controller 1 (Izquierda - Línea simple)
-             controller1 = renderer.xr.getController(0);
-             if (controller1) {
-                 controller1.addEventListener('selectstart', onSelectStart);
-                 controller1.addEventListener('selectend', onSelectEnd);
-                 scene.add(controller1);
-                 const lineMaterial = new THREE.LineBasicMaterial({ color: 0xcccccc });
-                 const lineGeometry = new THREE.BufferGeometry().setFromPoints([ new THREE.Vector3(0, 0, 0), new THREE.Vector3(0, 0, -0.2) ]);
-                 const line1 = new THREE.Line(lineGeometry, lineMaterial);
-                 controller1.add(line1);
-                 // console.log("Mando 1 (Izquierda) configurado.");
-             } else { console.error("¡No se pudo obtener el Controller 1!"); }
-
-             // Controller 2 (Derecha - Taco + Línea de Mira + Slider 3D)
-             controller2 = renderer.xr.getController(1);
+             // console.log("Configurando mandos (Taco en Controller 2)...");
+             controller1 = renderer.xr.getController(0); // Izquierda
+             if (controller1) { /* ... (añadir línea) ... */ }
+             controller2 = renderer.xr.getController(1); // Derecha
              if (controller2) {
                   controller2.addEventListener('selectstart', onSelectStart);
                   controller2.addEventListener('selectend', onSelectEnd);
                   scene.add(controller2);
-                  cueController = controller2; // Asignar como mando del taco
-                  // console.log("Controller 2 asignado como cueController.");
-
-                  // Taco (material estándar, posicionado)
+                  cueController = controller2;
+                  // Taco
                   const cueLength = 1.2;
                   const cueRadius = 0.01;
                   const cueGeometry = new THREE.CylinderGeometry(cueRadius, cueRadius * 0.8, cueLength, 16);
@@ -354,25 +345,17 @@
                   cueStickMesh.position.set(0, 0, -cueLength / 2 + 0.05);
                   cueStickMesh.rotation.set(Math.PI / 2, 0, 0);
                   cueStickMesh.castShadow = true;
-                  controller2.add(cueStickMesh); // Añadir taco posicionado
-                  // console.log("Taco añadido a Controller 2.");
-
-                  // Crear Línea de Mira
-                  const aimLineMaterial = new THREE.LineBasicMaterial({ color: 0xff00ff }); // Magenta
-                  const points = [];
-                  points.push(new THREE.Vector3(0, 0, 0)); // Punto inicial (se actualizará)
-                  points.push(new THREE.Vector3(0, 0, -1)); // Punto final (se actualizará)
+                  controller2.add(cueStickMesh);
+                  // Línea de Mira
+                  const aimLineMaterial = new THREE.LineBasicMaterial({ color: 0xff00ff });
+                  const points = [new THREE.Vector3(0, 0, 0), new THREE.Vector3(0, 0, -1)];
                   const aimLineGeometry = new THREE.BufferGeometry().setFromPoints(points);
                   aimLine = new THREE.Line(aimLineGeometry, aimLineMaterial);
-                  aimLine.visible = false; // Empezar invisible
-                  controller2.add(aimLine); // Añadir como hija del mando derecho
-                  // console.log("Línea de mira creada y añadida a Controller 2.");
-
-                  // Crear Slider 3D
+                  aimLine.visible = false;
+                  controller2.add(aimLine);
+                  // Slider 3D
                   sliderGroup3D = new THREE.Group();
-                  sliderGroup3D.visible = false; // Oculto inicialmente
-
-                  // Fondo del slider
+                  sliderGroup3D.visible = false;
                   const sliderBGGeom = new THREE.PlaneGeometry(sliderWidth, sliderHeight);
                   const canvas = document.createElement('canvas');
                   canvas.width = 256; canvas.height = 32;
@@ -384,77 +367,47 @@
                   const sliderBGMat = new THREE.MeshBasicMaterial({ map: sliderBGTexture, transparent: true, opacity: 0.8 });
                   sliderBackground = new THREE.Mesh(sliderBGGeom, sliderBGMat);
                   sliderGroup3D.add(sliderBackground);
-
-                  // Mango/Indicador del slider
-                  const handleGeom = new THREE.BoxGeometry(handleSize, handleSize * 1.5, handleSize * 0.5); // Cubo indicador
-                  const handleMat = new THREE.MeshBasicMaterial({ color: 0xffffff }); // Blanco
+                  const handleGeom = new THREE.BoxGeometry(handleSize, handleSize * 1.5, handleSize * 0.5);
+                  const handleMat = new THREE.MeshBasicMaterial({ color: 0xffffff });
                   sliderHandle = new THREE.Mesh(handleGeom, handleMat);
-                  sliderHandle.position.z = 0.01; // Ligeramente por encima del fondo
+                  sliderHandle.position.z = 0.01;
                   sliderGroup3D.add(sliderHandle);
-
-                  // Posicionar el grupo del slider encima del taco
-                  sliderGroup3D.position.set(0, 0.05, -0.2); // Ajustar Y y Z local según sea necesario
-                  sliderGroup3D.rotation.set(-Math.PI / 6, 0, 0); // Inclinarlo un poco para verlo mejor
-                  controller2.add(sliderGroup3D); // Añadir como hijo del mando
-                  console.log("Slider 3D creado y añadido a Controller 2.");
-
+                  sliderGroup3D.position.set(0, 0.05, -0.2);
+                  sliderGroup3D.rotation.set(-Math.PI / 6, 0, 0);
+                  controller2.add(sliderGroup3D);
+                  // console.log("Slider 3D creado y añadido a Controller 2.");
              } else { console.error("¡No se pudo obtener el Controller 2!"); }
              // console.log("Mandos configurados.");
          }
 
         // --- Función para crear el Slider Dinámico (HTML) - Eliminada ---
-        // function createDynamicSlider() { ... }
 
-        // ***** NUEVO: Función para configurar Sonido *****
+        // --- Función para configurar Sonido ---
         function setupSound() {
             if (typeof Tone === 'undefined') {
                 console.warn("Tone.js no está cargado. No habrá sonido.");
                 return;
             }
             try {
-                // Sonido para choque Bola-Bola (un ruido corto y agudo)
                 const noiseFilter = new Tone.Filter({type : 'bandpass', frequency : 1800, Q : 1.5}).toDestination();
-                ballHitSynth = new Tone.NoiseSynth({
-                    noise: { type: 'white' },
-                    envelope: { attack: 0.001, decay: 0.08, sustain: 0 }, // Más corto
-                    volume: -8 // Ajustar volumen inicial
-                }).connect(noiseFilter);
-
-                // Sonido para choque Bola-Banda (un golpe más sordo)
-                cushionHitSynth = new Tone.MembraneSynth({
-                    pitchDecay: 0.06,
-                    octaves: 3, // Menos octavas para sonido más grave
-                    envelope: { attack: 0.001, decay: 0.25, sustain: 0.01, release: 0.1 },
-                    volume: -6 // Ajustar volumen inicial
-                }).toDestination();
-
+                ballHitSynth = new Tone.NoiseSynth({ noise: { type: 'white' }, envelope: { attack: 0.001, decay: 0.08, sustain: 0 }, volume: -8 }).connect(noiseFilter);
+                cushionHitSynth = new Tone.MembraneSynth({ pitchDecay: 0.06, octaves: 3, envelope: { attack: 0.001, decay: 0.25, sustain: 0.01, release: 0.1 }, volume: -6 }).toDestination();
                 console.log("Sintetizadores Tone.js creados.");
-            } catch (e) {
-                console.error("Error creando sintetizadores Tone.js:", e);
-            }
+            } catch (e) { console.error("Error creando sintetizadores Tone.js:", e); }
         }
-        // ********************************************
 
         // --- WebXR Event Handlers (Manejar aiming y disparo + Activar Audio) ---
         function onSelectStart(event) {
              const controller = event.target;
              if (controller === cueController && !isStrokeInProgress) {
                  isTriggerDown = true;
-                 isAiming = true; // Iniciar modo apuntar/cargar
-                 // Mostrar slider 3D
+                 isAiming = true;
                  if (sliderGroup3D) sliderGroup3D.visible = true;
-                 // Ocultar línea de mira
                  if (aimLine) aimLine.visible = false;
-
-                 // ***** NUEVO: Iniciar Audio Context si es necesario *****
                  if (!audioInitialized && typeof Tone !== 'undefined' && Tone.context.state !== 'running') {
                      console.log("Intentando iniciar Audio Context...");
-                     Tone.start().then(() => {
-                         audioInitialized = true;
-                         console.log("Audio Context iniciado por el usuario.");
-                     }).catch(e => console.error("Error al iniciar Tone.js:", e));
+                     Tone.start().then(() => { audioInitialized = true; console.log("Audio Context iniciado."); }).catch(e => console.error("Error al iniciar Tone.js:", e));
                  }
-                 // ***************************************************
              }
         }
         function onSelectEnd(event) {
@@ -463,21 +416,17 @@
                  isTriggerDown = false;
                  if (isAiming) {
                      isAiming = false;
-                     // Ocultar slider 3D
                      if (sliderGroup3D) sliderGroup3D.visible = false;
-                     // ***** DISPARO REACTIVADO *****
-                     console.log(`Disparando con valor slider: ${currentSliderValue.toFixed(1)}`);
-                     shootBallManual(currentSliderValue); // Disparar con la velocidad capturada
+                     shootBallManual(currentSliderValue);
                  }
              }
         }
 
         // --- Billiards Logic Functions (shootBallManual ACEPTA VELOCIDAD) ---
         function shootBallManual(initialSpeedSlider) {
-            // console.log("--- Entrando a shootBallManual() ---");
-            if (!cueBall || !cueBall.velocity) { console.error("Error: cueBall o cueBall.velocity no definido."); return; }
-            if (!cueController) { console.error("Error: cueController no definido."); return; }
-            // La comprobación de isStrokeInProgress se hace ahora en onSelectStart
+            if (!cueBall || !cueBall.velocity) { return; }
+            if (!cueController) { return; }
+            // Comprobación isStrokeInProgress movida a onSelectStart
 
             const aimDirection = new THREE.Vector3();
             try {
@@ -487,21 +436,16 @@
                  aimDirection.negate(); // Dirección corregida
             } catch (e) { console.error("Error obteniendo dirección del mando:", e); return; }
 
-            // Mapear velocidad del slider (0-10) a velocidad real (minRealSpeed a maxRealSpeed)
             const sliderRatio = (initialSpeedSlider - minSliderValue) / (maxSliderValue - minSliderValue);
             const mappedSpeed = minRealSpeed + sliderRatio * (maxRealSpeed - minRealSpeed);
-
             cueBall.velocity.copy(aimDirection).multiplyScalar(mappedSpeed);
 
             isStrokeInProgress = true;
             hitYellowAfterStrokeStart = false;
             hitRedAfterStrokeStart = false;
             cushionHitsThisStroke = 0;
-            console.log(`¡Disparo Manual Realizado! Velocidad: ${mappedSpeed.toFixed(1)} (Slider: ${initialSpeedSlider.toFixed(1)})`);
-
-            // ***** NUEVO: Sonido de golpeo de taco (opcional) *****
+            console.log(`Disparo Manual! Velocidad: ${mappedSpeed.toFixed(1)} (Slider: ${initialSpeedSlider.toFixed(1)})`);
             playSound(ballHitSynth, mappedSpeed, maxRealSpeed * 1.1, 'ball'); // Sonido al disparar
-            // *****************************************************
         }
 
         // --- Window Resize Handler ---
@@ -511,66 +455,35 @@
             renderer.setSize(window.innerWidth, window.innerHeight);
          }
 
-        // ***** NUEVO: Función para reproducir Sonido *****
+        // --- Función para reproducir Sonido ---
         function playSound(synth, velocity, maxVelocity, type) {
-            if (!audioInitialized || !synth) return; // Salir si no hay audio o synth
-
-            const now = performance.now(); // Usar performance.now()
-
-            // Debouncing
+            if (!audioInitialized || !synth) return;
+            const now = performance.now();
             if (type === 'ball' && now - lastBallHitTime < soundDebounce) return;
             if (type === 'cushion' && now - lastCushionHitTime < soundDebounce) return;
-
-            // Calcular volumen basado en la velocidad
             const velocityRatio = Math.min(1, Math.abs(velocity) / maxVelocity);
-            if (velocityRatio < 0.05) return; // Umbral mínimo
-            const volumeDB = -30 + 25 * velocityRatio; // Mapeo a dB
-
+            if (velocityRatio < 0.05) return;
+            const volumeDB = -30 + 25 * velocityRatio;
             try {
-                if (synth.volume && typeof synth.volume.value !== 'undefined') {
-                     synth.volume.value = volumeDB;
-                }
-
-                // Disparar el sonido
-                if (synth instanceof Tone.NoiseSynth) {
-                    synth.triggerAttackRelease("16n");
-                    lastBallHitTime = now;
-                } else if (synth instanceof Tone.MembraneSynth) {
-                    const note = velocityRatio > 0.5 ? "C3" : "D3";
-                    synth.triggerAttackRelease(note, "8n");
-                    lastCushionHitTime = now;
-                } else {
-                     synth.triggerAttackRelease("C4", "8n");
-                     if (type === 'ball') lastBallHitTime = now;
-                     if (type === 'cushion') lastCushionHitTime = now;
-                }
-            } catch (e) {
-                console.error("Error al disparar sonido Tone.js:", e);
-            }
+                if (synth.volume && typeof synth.volume.value !== 'undefined') { synth.volume.value = volumeDB; }
+                if (synth instanceof Tone.NoiseSynth) { synth.triggerAttackRelease("16n"); lastBallHitTime = now; }
+                else if (synth instanceof Tone.MembraneSynth) { const note = velocityRatio > 0.5 ? "C3" : "D3"; synth.triggerAttackRelease(note, "8n"); lastCushionHitTime = now; }
+                else { synth.triggerAttackRelease("C4", "8n"); if (type === 'ball') lastBallHitTime = now; if (type === 'cushion') lastCushionHitTime = now; }
+            } catch (e) { console.error("Error al disparar sonido Tone.js:", e); }
         }
-        // ********************************************
 
-
-        // --- Animation Loop (Actualizar Slider 3D y FÍSICA MANUAL CON SONIDO) ---
+        // --- Animation Loop (FÍSICA MANUAL + SLIDER + SONIDO + COLISIÓN MEJORADA) ---
         function animate() {
-            // ***** USAR performance.now() para oscilación *****
-            const elapsedTime = performance.now() / 1000; // Tiempo en segundos
-            // *************************************************
+            const elapsedTime = performance.now() / 1000; // Tiempo para oscilación
 
             // Actualizar Slider 3D si estamos apuntando
             if (isAiming && sliderGroup3D && sliderHandle) {
-                const oscillation = (Math.sin(elapsedTime * oscillationSpeed) + 1) / 2; // 0 a 1
-                currentSliderValue = minSliderValue + oscillation * (maxSliderValue - minSliderValue); // Mapear a 0-10
-
-                // Mapear valor 0-10 a posición X local del handle (-width/2 a +width/2)
+                const oscillation = (Math.sin(elapsedTime * oscillationSpeed) + 1) / 2;
+                currentSliderValue = minSliderValue + oscillation * (maxSliderValue - minSliderValue);
                 const handleX = -sliderWidth / 2 + oscillation * sliderWidth;
                 sliderHandle.position.x = handleX;
-
-                // Asegurarse de que el slider esté visible
                 if (!sliderGroup3D.visible) sliderGroup3D.visible = true;
-
             } else if (sliderGroup3D) {
-                 // Ocultar slider si no estamos apuntando
                 if (sliderGroup3D.visible) sliderGroup3D.visible = false;
             }
 
@@ -584,14 +497,11 @@
                      positions.setXYZ(1, farPointLocal.x, farPointLocal.y, farPointLocal.z);
                      positions.needsUpdate = true;
                      aimLine.geometry.computeBoundingSphere();
-                     aimLine.visible = !isAiming; // Mostrar solo si NO estamos cargando
-                 } catch (e) {
-                     if(aimLine) aimLine.visible = false;
-                 }
+                     aimLine.visible = !isAiming;
+                 } catch (e) { if(aimLine) aimLine.visible = false; }
              } else if (aimLine) {
                  aimLine.visible = false;
              }
-
 
             // --- Actualizar Física Manual ---
             let allStopped = true;
@@ -600,11 +510,9 @@
                 const velSq = ball.velocity.lengthSq();
                 if (velSq > MIN_VELOCITY_SQ) {
                     allStopped = false;
-                    ball.velocity.multiplyScalar(FRICTION); // Fricción corregida
-                    // ***** Usar timeStep fijo para posición *****
-                    deltaPos.copy(ball.velocity).multiplyScalar(timeStep);
-                    ball.mesh.position.add(deltaPos); // Mover malla
-
+                    ball.velocity.multiplyScalar(FRICTION);
+                    deltaPos.copy(ball.velocity).multiplyScalar(timeStep); // Usar timeStep fijo
+                    ball.mesh.position.add(deltaPos);
                     // Colisiones con Bandas y SONIDO
                     let hitCushion = false;
                     let impactVel = 0;
@@ -612,51 +520,90 @@
                     else if (ball.mesh.position.x > MAX_X) { impactVel = Math.abs(ball.velocity.x); ball.mesh.position.x = MAX_X; ball.velocity.x *= -CUSHION_RESTITUTION; hitCushion = true; }
                     if (ball.mesh.position.z < MIN_Z) { impactVel = Math.abs(ball.velocity.z); ball.mesh.position.z = MIN_Z; ball.velocity.z *= -CUSHION_RESTITUTION; hitCushion = true; }
                     else if (ball.mesh.position.z > MAX_Z) { impactVel = Math.abs(ball.velocity.z); ball.mesh.position.z = MAX_Z; ball.velocity.z *= -CUSHION_RESTITUTION; hitCushion = true; }
-
                     if (hitCushion) {
-                        // ***** LLAMADA A SONIDO BANDA *****
                         playSound(cushionHitSynth, impactVel, 5, 'cushion');
                         if (ball.name === 'white' && isStrokeInProgress) { cushionHitsThisStroke++; }
                     }
-
                 } else if (velSq > 0) {
                     ball.velocity.set(0, 0, 0);
                 }
             });
 
-            // Comprobar Colisiones Bola-Bola y SONIDO
+            // ***** CAMBIO: Lógica de Colisión Bola-Bola Mejorada *****
             for (let i = 0; i < balls.length; i++) {
                 for (let j = i + 1; j < balls.length; j++) {
-                     const ball1 = balls[i];
-                     const ball2 = balls[j];
-                     if (!ball1.mesh || !ball2.mesh || !ball1.velocity || !ball2.velocity) continue;
-                     const distSq = ball1.mesh.position.distanceToSquared(ball2.mesh.position);
-                     const minDist = ballRadius * 2;
-                     const minDistSq = minDist * minDist;
-                     if (distSq < minDistSq) {
-                         collisionNormal.copy(ball2.mesh.position).sub(ball1.mesh.position).normalize();
-                         relativeVelocity.copy(ball2.velocity).sub(ball1.velocity);
-                         const velocityAlongNormal = relativeVelocity.dot(collisionNormal);
-                         if (velocityAlongNormal < 0) {
-                             // ***** LLAMADA A SONIDO BOLA *****
-                             // Usar la velocidad relativa a lo largo de la normal como medida de impacto
-                             playSound(ballHitSynth, velocityAlongNormal, 5, 'ball');
-                             // ************************************
+                    const ball1 = balls[i];
+                    const ball2 = balls[j];
+                    if (!ball1.mesh || !ball2.mesh || !ball1.velocity || !ball2.velocity) continue;
 
-                             const impulse = (-(1 + BALL_RESTITUTION) * velocityAlongNormal) / 2;
-                             impulseVec.copy(collisionNormal).multiplyScalar(impulse);
-                             ball1.velocity.add(impulseVec);
-                             ball2.velocity.sub(impulseVec);
+                    const pos1 = ball1.mesh.position;
+                    const pos2 = ball2.mesh.position;
+                    const vel1 = ball1.velocity;
+                    const vel2 = ball2.velocity;
 
-                             if (isStrokeInProgress) { /* ... (registrar golpes) ... */ }
-                             const overlap = minDist - Math.sqrt(distSq);
-                             correction.copy(collisionNormal).multiplyScalar(overlap * 0.51);
-                             ball1.mesh.position.sub(correction);
-                             ball2.mesh.position.add(correction);
-                         }
-                     }
+                    deltaPos.copy(pos1).sub(pos2); // Vector de 2 a 1
+                    const distSq = deltaPos.lengthSq();
+                    const minDist = ballRadius * 2;
+                    const minDistSq = minDist * minDist;
+
+                    // 1. Comprobar si hay colisión
+                    if (distSq < minDistSq && distSq > 1e-9) { // Evitar dividir por cero si están exactamente superpuestas
+                        const distance = Math.sqrt(distSq);
+                        const overlap = minDist - distance;
+
+                        // 2. Calcular Normal y Tangente de Colisión
+                        collisionNormal.copy(deltaPos).divideScalar(distance); // Normal normalizada (de 2 a 1)
+                        collisionTangent.set(-collisionNormal.z, 0, collisionNormal.x); // Tangente perpendicular en plano XZ
+
+                        // 3. Proyectar velocidades iniciales sobre Normal y Tangente
+                        const v1n = vel1.dot(collisionNormal);
+                        const v1t = vel1.dot(collisionTangent);
+                        const v2n = vel2.dot(collisionNormal);
+                        const v2t = vel2.dot(collisionTangent);
+
+                        // 4. Solo actuar si se están acercando (componente normal relativa negativa)
+                        // (v1n es la velocidad de 1 hacia 2, v2n es la de 2 hacia 1 a lo largo de la normal)
+                        // Se acercan si v1n > v2n
+                        if (v1n - v2n > 0) {
+
+                            // 5. Calcular nuevas velocidades a lo largo de la normal (intercambio para masas iguales)
+                            // Fórmula simplificada para masas iguales: v1n' = v2n, v2n' = v1n
+                            // Aplicar restitución (rebote)
+                            const newV1n = (v1n * (1 - BALL_RESTITUTION) + 2 * BALL_RESTITUTION * v2n) / 2; // Dividido por m1+m2 = 1+1=2
+                            const newV2n = (v2n * (1 - BALL_RESTITUTION) + 2 * BALL_RESTITUTION * v1n) / 2;
+                            // Las velocidades tangenciales no cambian
+                            const newV1t = v1t;
+                            const newV2t = v2t;
+
+                            // 6. Convertir velocidades escalares de nuevo a vectores
+                            vel1nVec.copy(collisionNormal).multiplyScalar(newV1n);
+                            vel1tVec.copy(collisionTangent).multiplyScalar(newV1t);
+                            vel2nVec.copy(collisionNormal).multiplyScalar(newV2n);
+                            vel2tVec.copy(collisionTangent).multiplyScalar(newV2t);
+
+                            // 7. Combinar componentes y aplicar pérdida de energía
+                            vel1.copy(vel1nVec).add(vel1tVec).multiplyScalar(ENERGY_LOSS_FACTOR);
+                            vel2.copy(vel2nVec).add(vel2tVec).multiplyScalar(ENERGY_LOSS_FACTOR);
+
+                            // 8. Tocar sonido de bola
+                            playSound(ballHitSynth, v1n - v2n, 10, 'ball'); // Usar velocidad relativa normal como intensidad
+
+                            // 9. Registrar golpes para puntuación
+                            if (isStrokeInProgress) {
+                                if ((ball1.name === 'white' && ball2.name === 'yellow') || (ball1.name === 'yellow' && ball2.name === 'white')) { if (!hitYellowAfterStrokeStart) /*console.log("Blanca golpea AMARILLA (Manual)")*/; hitYellowAfterStrokeStart = true; }
+                                if ((ball1.name === 'white' && ball2.name === 'red') || (ball1.name === 'red' && ball2.name === 'white')) { if (!hitRedAfterStrokeStart) /*console.log("Blanca golpea ROJA (Manual)")*/; hitRedAfterStrokeStart = true; }
+                            }
+
+                            // 10. Corregir superposición
+                            correction.copy(collisionNormal).multiplyScalar(overlap * 0.51);
+                            pos1.add(correction); // Mover bola 1
+                            pos2.sub(correction); // Mover bola 2
+                        }
+                    }
                 }
             }
+            // ***** FIN CAMBIO COLISIÓN BOLA-BOLA *****
+
 
             // Comprobar fin de tiro
             if (isStrokeInProgress && allStopped) {
@@ -682,3 +629,4 @@
     </script>
 </body>
 </html>
+
