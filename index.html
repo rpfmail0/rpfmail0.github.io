@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
     <meta charset="utf-8">
-    <title>WebXR Billar - Física Manual Completa + Slider</title> <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>WebXR Billar - Física Manual + Slider 3D sin Clock</title> <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
     <style>
         body { margin: 0; overflow: hidden; font-family: monospace; background-color: #000; }
         canvas { display: block; }
@@ -12,22 +12,20 @@
             right: 20px;
             z-index: 999;
         }
-        /* Estilos para Slider Dinámico */
+        /* Estilos para Slider 3D */
         .dynamic-slider-container {
-            position: absolute; /* Se posicionará con JS */
-            background-color: rgba(50, 50, 50, 0.8); /* Fondo semitransparente */
+            position: absolute;
+            background-color: rgba(50, 50, 50, 0.8);
             padding: 15px;
             border-radius: 10px;
             color: white;
             z-index: 101;
-            font-size: 1em; /* Tamaño fuente aumentado */
+            font-size: 1em;
             text-align: center;
             width: 280px;
             border: 1px solid #888;
             box-shadow: 0 2px 5px rgba(0,0,0,0.5);
-            /* Oculto por defecto, se muestra con JS */
-            display: none;
-            /* Evitar que capture eventos de puntero del mundo 3D */
+            display: none; /* Oculto por defecto */
             pointer-events: none;
         }
         .dynamic-slider-container label {
@@ -41,19 +39,17 @@
             justify-content: center;
             margin-top: 5px;
         }
-        /* Estilo para la barra (input range) */
         .dynamic-slider-container input[type="range"] {
-            width: 180px; /* Más ancho */
+            width: 180px;
             height: 10px;
-            cursor: default; /* No interactuable */
+            cursor: default;
             margin: 0 10px 0 0;
-            appearance: none; /* Quitar estilo por defecto */
-            background: linear-gradient(to right, #0f0, #ff0, #f00); /* Gradiente de color */
+            appearance: none;
+            background: linear-gradient(to right, #0f0, #ff0, #f00);
             border-radius: 5px;
             outline: none;
         }
-        /* Estilo para el 'pulgar' del slider (indicador) */
-        .dynamic-slider-container input[type="range"]::-webkit-slider-thumb { /* Chrome, Edge, Safari */
+        .dynamic-slider-container input[type="range"]::-webkit-slider-thumb {
            appearance: none;
            width: 16px;
            height: 16px;
@@ -61,17 +57,17 @@
            border-radius: 50%;
            cursor: default;
         }
-        .dynamic-slider-container input[type="range"]::-moz-range-thumb { /* Firefox */
+        .dynamic-slider-container input[type="range"]::-moz-range-thumb {
            width: 16px;
            height: 16px;
            background: #fff;
            border-radius: 50%;
            cursor: default;
-           border: none; /* Quitar borde por defecto en FF */
+           border: none;
         }
-        .dynamic-slider-container span { /* Valor numérico */
+        .dynamic-slider-container span {
             display: inline-block;
-            min-width: 45px; /* Más espacio */
+            min-width: 45px;
             text-align: right;
             font-weight: bold;
             font-size: 1.1em;
@@ -104,9 +100,9 @@
 
         // WebXR Controller Variables
         let controller1, controller2;
-        let cueController = null; // Mando para disparar (controller2)
-        let cueStickMesh; // Visual del taco
-        let aimLine; // Línea de mira (opcional, comentada por ahora)
+        let cueController = null;
+        let cueStickMesh;
+        let aimLine;
         let isTriggerDown = false;
 
         // Gameplay State
@@ -116,18 +112,23 @@
         let hitRedAfterStrokeStart = false;
         let cushionHitsThisStroke = 0;
 
-        // Variables para Slider Dinámico
-        let dynamicSliderContainer = null;
-        let dynamicForceSlider = null;
-        let dynamicForceValueSpan = null;
+        // Variables para Slider 3D
+        let sliderGroup3D = null;
+        let sliderBackground = null;
+        let sliderHandle = null;
         let isAiming = false;
-        let currentShotSpeed = 0;
+        let currentShotSpeed = 0; // Velocidad actual (0-10)
         const maxShotSpeed = 10.0;
         const minShotSpeed = 0.0;
         const oscillationSpeed = 3.0;
+        const sliderWidth = 0.4;
+        const sliderHeight = 0.05;
+        const handleSize = 0.03;
+        const minRealSpeed = 0.5;
+        const maxRealSpeed = 8.0;
 
         // Constantes de Física Manual
-        const FRICTION = 0.988; // Fricción reducida
+        const FRICTION = 0.988;
         const MIN_VELOCITY_SQ = 0.0001;
         const CUSHION_RESTITUTION = 0.6;
         const BALL_RESTITUTION = 0.9;
@@ -147,7 +148,10 @@
         const MIN_Z = -tableHeight / 2 + ballRadius;
         const MAX_Z = tableHeight / 2 - ballRadius;
 
-        const clock = new THREE.Clock(); // Para delta time y oscilación
+        // ***** CAMBIO: Usar timeStep fijo *****
+        const timeStep = 1 / 90; // Asumir 90 FPS para VR
+        // const clock = new THREE.Clock(); // Eliminado
+        // ************************************
 
         // Variables temporales para cálculos
         const tempVector = new THREE.Vector3();
@@ -157,14 +161,15 @@
         const deltaPos = new THREE.Vector3();
         const collisionNormal = new THREE.Vector3();
         const relativeVelocity = new THREE.Vector3();
-        const impulseVec = new THREE.Vector3();
+        const impulseVec = new THREE.Vector3(); // Reusado para velocidad en shootBallManual
         const correction = new THREE.Vector3();
+
 
         init();
 
         // --- Initialization ---
         function init() {
-            console.log("Iniciando escena WebXR Billar (Física Manual Completa + Slider)...");
+            console.log("Iniciando escena WebXR Billar (Física Manual + Slider 3D sin Clock)...");
 
             scene = new THREE.Scene();
             camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 100);
@@ -211,17 +216,17 @@
             createBallsManualPhysics(tableGroup);
 
             // --- Configurar Mandos (Visual) ---
-            setupControllers(); // Ahora crea la línea de mira
+            setupControllers(); // Ahora crea la línea de mira y el slider 3D
 
             // --- Crear Contenedor del Slider Dinámico (inicialmente oculto) ---
-            createDynamicSlider();
+            createDynamicSlider(); // Crea el slider 3D
 
             // --- Event Listeners ---
             window.addEventListener('resize', onWindowResize, false);
 
             // --- Start Animation Loop ---
             renderer.setAnimationLoop(animate);
-            console.log("Inicialización completa (Física Manual Completa + Slider).");
+            console.log("Inicialización completa (Física Manual + Slider 3D sin Clock).");
         }
 
         // --- Función para crear solo la superficie visual ---
@@ -303,9 +308,9 @@
               // console.log("Mallas visuales de bolas creadas.");
         }
 
-        // --- Setup Controllers (INTERCAMBIADO + Línea de Mira) ---
+        // --- Setup Controllers (INTERCAMBIADO + Línea de Mira + Slider 3D) ---
         function setupControllers() {
-             // console.log("Configurando mandos (Taco en Controller 2)...");
+             console.log("Configurando mandos (Taco en Controller 2)...");
 
              // Controller 1 (Izquierda - Línea simple)
              controller1 = renderer.xr.getController(0);
@@ -320,7 +325,7 @@
                  // console.log("Mando 1 (Izquierda) configurado.");
              } else { console.error("¡No se pudo obtener el Controller 1!"); }
 
-             // Controller 2 (Derecha - Taco + Línea de Mira)
+             // Controller 2 (Derecha - Taco + Línea de Mira + Slider 3D)
              controller2 = renderer.xr.getController(1);
              if (controller2) {
                   controller2.addEventListener('selectstart', onSelectStart);
@@ -352,46 +357,46 @@
                   controller2.add(aimLine); // Añadir como hija del mando derecho
                   // console.log("Línea de mira creada y añadida a Controller 2.");
 
+                  // Crear Slider 3D
+                  sliderGroup3D = new THREE.Group();
+                  sliderGroup3D.visible = false; // Oculto inicialmente
+
+                  // Fondo del slider
+                  const sliderBGGeom = new THREE.PlaneGeometry(sliderWidth, sliderHeight);
+                  const canvas = document.createElement('canvas');
+                  canvas.width = 256;
+                  canvas.height = 32;
+                  const ctx = canvas.getContext('2d');
+                  const gradient = ctx.createLinearGradient(0, 0, canvas.width, 0);
+                  gradient.addColorStop(0, 'green');
+                  gradient.addColorStop(0.5, 'yellow');
+                  gradient.addColorStop(1, 'red');
+                  ctx.fillStyle = gradient;
+                  ctx.fillRect(0, 0, canvas.width, canvas.height);
+                  const sliderBGTexture = new THREE.CanvasTexture(canvas);
+                  const sliderBGMat = new THREE.MeshBasicMaterial({ map: sliderBGTexture, transparent: true, opacity: 0.8 });
+                  sliderBackground = new THREE.Mesh(sliderBGGeom, sliderBGMat);
+                  sliderGroup3D.add(sliderBackground);
+
+                  // Mango/Indicador del slider
+                  const handleGeom = new THREE.BoxGeometry(handleSize, handleSize * 1.5, handleSize * 0.5); // Cubo indicador
+                  const handleMat = new THREE.MeshBasicMaterial({ color: 0xffffff }); // Blanco
+                  sliderHandle = new THREE.Mesh(handleGeom, handleMat);
+                  sliderHandle.position.z = 0.01; // Ligeramente por encima del fondo
+                  sliderGroup3D.add(sliderHandle);
+
+                  // Posicionar el grupo del slider encima del taco
+                  sliderGroup3D.position.set(0, 0.05, -0.2); // Ajustar Y y Z local según sea necesario
+                  sliderGroup3D.rotation.set(-Math.PI / 6, 0, 0); // Inclinarlo un poco para verlo mejor
+                  controller2.add(sliderGroup3D); // Añadir como hijo del mando
+                  console.log("Slider 3D creado y añadido a Controller 2.");
+
              } else { console.error("¡No se pudo obtener el Controller 2!"); }
              // console.log("Mandos configurados.");
          }
 
-        // --- Función para crear el Slider Dinámico ---
-        function createDynamicSlider() {
-            dynamicSliderContainer = document.createElement('div');
-            dynamicSliderContainer.id = 'dynamicForceSliderContainer'; // ID opcional
-            dynamicSliderContainer.className = 'dynamic-slider-container'; // Aplicar estilos CSS
-
-            const label = document.createElement('label');
-            label.htmlFor = 'dynamicForceSlider';
-            label.textContent = 'Fuerza Disparo:';
-            dynamicSliderContainer.appendChild(label);
-
-            const pairDiv = document.createElement('div');
-            pairDiv.className = 'slider-value-pair';
-
-            dynamicForceSlider = document.createElement('input');
-            dynamicForceSlider.type = 'range';
-            dynamicForceSlider.id = 'dynamicForceSlider';
-            dynamicForceSlider.min = minShotSpeed.toString();
-            dynamicForceSlider.max = maxShotSpeed.toString();
-            dynamicForceSlider.step = '0.1';
-            dynamicForceSlider.value = (minShotSpeed + maxShotSpeed / 2).toString(); // Valor inicial medio
-            dynamicForceSlider.disabled = true; // Hacerlo no interactuable
-            pairDiv.appendChild(dynamicForceSlider);
-
-            dynamicForceValueSpan = document.createElement('span');
-            dynamicForceValueSpan.id = 'dynamicForceValue';
-            dynamicForceValueSpan.textContent = parseFloat(dynamicForceSlider.value).toFixed(1);
-            pairDiv.appendChild(dynamicForceValueSpan);
-
-            dynamicSliderContainer.appendChild(pairDiv);
-            document.body.appendChild(dynamicSliderContainer); // Añadir al body
-            // console.log("Slider dinámico creado (oculto).");
-        }
-
-        // --- Función para configurar el Slider (Eliminada) ---
-        // function setupForceSlider() { ... }
+        // --- Función para crear el Slider Dinámico (HTML) - Eliminada ---
+        // function createDynamicSlider() { ... }
 
         // --- WebXR Event Handlers (Manejar aiming y disparo) ---
         function onSelectStart(event) {
@@ -399,7 +404,10 @@
              if (controller === cueController && !isStrokeInProgress) {
                  isTriggerDown = true;
                  isAiming = true; // Iniciar modo apuntar/cargar
-                 if (dynamicSliderContainer) dynamicSliderContainer.style.display = 'block'; // Mostrar slider
+                 // Mostrar slider 3D
+                 if (sliderGroup3D) sliderGroup3D.visible = true;
+                 // Ocultar línea de mira
+                 if (aimLine) aimLine.visible = false;
                  // console.log("Aiming started...");
              }
         }
@@ -409,7 +417,9 @@
                  isTriggerDown = false;
                  if (isAiming) {
                      isAiming = false;
-                     if (dynamicSliderContainer) dynamicSliderContainer.style.display = 'none'; // Ocultar slider
+                     // Ocultar slider 3D
+                     if (sliderGroup3D) sliderGroup3D.visible = false;
+                     // Mostrar línea de mira (se actualiza en animate)
                      // console.log(`Shooting with speed: ${currentShotSpeed.toFixed(1)}`);
                      shootBallManual(currentShotSpeed); // Disparar con la velocidad capturada
                  }
@@ -417,10 +427,10 @@
         }
 
         // --- Billiards Logic Functions (shootBallManual ACEPTA VELOCIDAD) ---
-        function shootBallManual(initialSpeed) {
+        function shootBallManual(initialSpeedSlider) { // Renombrar parámetro para claridad
             if (!cueBall || !cueBall.velocity) { return; }
             if (!cueController) { return; }
-            // La comprobación de isStrokeInProgress se hace ahora en onSelectEnd
+            // La comprobación de isStrokeInProgress se hace ahora en onSelectStart
 
             const aimDirection = new THREE.Vector3();
             try {
@@ -430,13 +440,17 @@
                  aimDirection.negate(); // Dirección corregida
             } catch (e) { console.error("Error obteniendo dirección del mando:", e); return; }
 
-            cueBall.velocity.copy(aimDirection).multiplyScalar(initialSpeed);
+            // Mapear velocidad del slider (0-10) a velocidad real (minRealSpeed a maxRealSpeed)
+            const sliderRatio = (initialSpeedSlider - minShotSpeed) / (maxShotSpeed - minShotSpeed); // 0 a 1
+            const mappedSpeed = minRealSpeed + sliderRatio * (maxRealSpeed - minRealSpeed);
+
+            cueBall.velocity.copy(aimDirection).multiplyScalar(mappedSpeed);
 
             isStrokeInProgress = true;
             hitYellowAfterStrokeStart = false;
             hitRedAfterStrokeStart = false;
             cushionHitsThisStroke = 0;
-            // console.log(`¡Disparo Manual Realizado! Velocidad: ${initialSpeed.toFixed(1)}`);
+            console.log(`Disparo Manual Realizado! Velocidad: ${mappedSpeed.toFixed(1)} (Slider: ${initialSpeedSlider.toFixed(1)})`);
         }
 
         // --- Window Resize Handler ---
@@ -446,40 +460,52 @@
             renderer.setSize(window.innerWidth, window.innerHeight);
          }
 
-        // --- Animation Loop (Actualizar Slider y Física Manual) ---
+        // --- Animation Loop (Actualizar Slider 3D y Física Manual) ---
         function animate() {
-            const delta = clock.getDelta();
-            const elapsedTime = clock.getElapsedTime(); // Tiempo total para oscilación
+            // ***** CAMBIO: Usar performance.now() para oscilación *****
+            const elapsedTime = performance.now() / 1000; // Tiempo en segundos
+            // ********************************************************
 
-            // Actualizar Slider si estamos apuntando
-            if (isAiming && dynamicForceSlider && dynamicForceValueSpan) {
-                const oscillation = (Math.sin(elapsedTime * oscillationSpeed) + 1) / 2; // 0 a 1
-                currentShotSpeed = minShotSpeed + oscillation * (maxShotSpeed - minShotSpeed); // Mapear a 0-10
-                dynamicForceSlider.value = currentShotSpeed.toString();
-                dynamicForceValueSpan.textContent = currentShotSpeed.toFixed(1);
+            // Actualizar Slider 3D si estamos apuntando
+            if (isAiming && sliderGroup3D && sliderHandle) {
+                // Oscilación sinusoidal entre 0 y 1
+                const oscillation = (Math.sin(elapsedTime * oscillationSpeed) + 1) / 2;
+                // Mapear a velocidad 0-10
+                currentShotSpeed = minShotSpeed + oscillation * (maxShotSpeed - minShotSpeed);
 
-                 // Posicionar el slider cerca del mando izquierdo (controller1)
-                 if (controller1 && renderer.xr.isPresenting) {
-                    tempVector.set(0, 0.1, -0.1); // Offset local respecto al mando izquierdo
-                    tempVector.applyMatrix4(controller1.matrixWorld); // Convertir a coordenadas mundiales
-                    tempVector.project(camera); // Proyectar a pantalla
+                // Mapear velocidad 0-10 a posición X local del handle (-width/2 a +width/2)
+                const handleX = -sliderWidth / 2 + oscillation * sliderWidth;
+                sliderHandle.position.x = handleX;
 
-                    const widthHalf = window.innerWidth / 2;
-                    const heightHalf = window.innerHeight / 2;
-                    let screenX = (tempVector.x * widthHalf) + widthHalf;
-                    let screenY = - (tempVector.y * heightHalf) + heightHalf;
+                // Asegurarse de que el slider esté visible
+                if (!sliderGroup3D.visible) sliderGroup3D.visible = true;
 
-                    const containerWidth = dynamicSliderContainer.offsetWidth;
-                    const containerHeight = dynamicSliderContainer.offsetHeight;
-                    screenX = Math.max(10, Math.min(screenX - containerWidth / 2, window.innerWidth - containerWidth - 10));
-                    screenY = Math.max(10, Math.min(screenY - containerHeight - 20, window.innerHeight - containerHeight - 10)); // Poner encima del mando
-
-                    dynamicSliderContainer.style.left = `${screenX}px`;
-                    dynamicSliderContainer.style.top = `${screenY}px`;
-                 }
+            } else if (sliderGroup3D) {
+                 // Ocultar slider si no estamos apuntando
+                if (sliderGroup3D.visible) sliderGroup3D.visible = false;
             }
 
-            // Actualizar Física Manual
+            // Actualizar Línea de Mira
+            if (cueController && cueStickMesh && aimLine && renderer.xr.isPresenting) {
+                 try {
+                     tipLocalOffset.set(0, 0, -cueStickMesh.geometry.parameters.height + 0.02);
+                     farPointLocal.copy(aimDirectionLocal).multiplyScalar(5);
+                     const positions = aimLine.geometry.attributes.position;
+                     positions.setXYZ(0, tipLocalOffset.x, tipLocalOffset.y, tipLocalOffset.z);
+                     positions.setXYZ(1, farPointLocal.x, farPointLocal.y, farPointLocal.z);
+                     positions.needsUpdate = true;
+                     aimLine.geometry.computeBoundingSphere();
+                     aimLine.visible = !isAiming; // Mostrar solo si NO estamos cargando
+                 } catch (e) {
+                     // console.error("Error actualizando línea de mira:", e); // Log menos verboso
+                     if(aimLine) aimLine.visible = false;
+                 }
+             } else if (aimLine) {
+                 aimLine.visible = false;
+             }
+
+
+            // --- Actualizar Física Manual ---
             let allStopped = true;
             balls.forEach(ball => {
                 if (!ball || !ball.velocity || !ball.mesh) return;
@@ -487,7 +513,8 @@
                 if (velSq > MIN_VELOCITY_SQ) {
                     allStopped = false;
                     ball.velocity.multiplyScalar(FRICTION); // Fricción corregida
-                    deltaPos.copy(ball.velocity).multiplyScalar(delta); // Usar delta y vector temporal
+                    // ***** Usar timeStep fijo para posición *****
+                    deltaPos.copy(ball.velocity).multiplyScalar(timeStep);
                     ball.mesh.position.add(deltaPos); // Mover malla
                     // Colisiones con Bandas
                     let hitCushion = false;
@@ -543,34 +570,6 @@
                  hitRedAfterStrokeStart = false;
                  cushionHitsThisStroke = 0;
             }
-
-            // Actualizar Línea de Mira
-            if (cueController && cueStickMesh && aimLine && renderer.xr.isPresenting) {
-                 try {
-                     // Calcular posición de la punta del taco en COORDENADAS DEL MANDO
-                     tipLocalOffset.set(0, 0, -cueStickMesh.geometry.parameters.height + 0.02); // Offset Z local
-
-                     // Calcular dirección de apuntado en COORDENADAS DEL MANDO (Z negativo)
-                     aimDirectionLocal.set(0, 0, -1);
-                     farPointLocal.copy(aimDirectionLocal).multiplyScalar(5); // 5 metros hacia adelante localmente
-
-                     // Actualizar los puntos de la línea
-                     const positions = aimLine.geometry.attributes.position;
-                     positions.setXYZ(0, tipLocalOffset.x, tipLocalOffset.y, tipLocalOffset.z);
-                     positions.setXYZ(1, farPointLocal.x, farPointLocal.y, farPointLocal.z);
-                     positions.needsUpdate = true;
-                     aimLine.geometry.computeBoundingSphere(); // Importante
-
-                     aimLine.visible = !isAiming; // Mostrar solo si NO estamos cargando el disparo
-
-                 } catch (e) {
-                     console.error("Error actualizando línea de mira:", e);
-                     aimLine.visible = false;
-                 }
-             } else if (aimLine) {
-                 aimLine.visible = false;
-             }
-
 
             // Render Scene
             try {
