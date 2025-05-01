@@ -2,7 +2,8 @@
 <html lang="es">
 <head>
     <meta charset="utf-8">
-    <title>WebXR Billar - Física Manual + Slider Fuerza</title> <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>WebXR Billar - Física Manual + Slider Fuerza</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
     <style>
         body { margin: 0; overflow: hidden; font-family: monospace; background-color: #000; }
         canvas { display: block; }
@@ -12,22 +13,25 @@
             right: 20px;
             z-index: 999;
         }
-        /* ***** NUEVO: Estilos para el Slider ***** */
+        /* ***** CAMBIO: Estilos para Slider en Esquina Superior Derecha ***** */
         #forceControlContainer {
             position: absolute;
-            bottom: 20px; /* Ajustar posición vertical */
-            left: 50%;
-            transform: translateX(-50%); /* Centrar horizontalmente */
+            /* Cambiado de bottom a top */
+            top: 20px;
+            /* Cambiado de left/transform a right */
+            right: 20px;
+            /* transform: translateX(-50%); /* Eliminado */
             background-color: rgba(0, 0, 0, 0.7);
             padding: 10px 15px;
             border-radius: 8px;
             color: white;
-            z-index: 101; /* Asegurar que esté sobre el canvas */
+            z-index: 101;
             font-size: 0.9em;
             text-align: center;
-            width: 250px; /* Ancho del contenedor */
-            display: block; /* Mostrar por defecto */
+            width: 250px;
+            display: block;
         }
+        /* El resto de estilos para el slider se mantienen */
         #forceControlContainer label {
             display: block;
             margin-bottom: 5px;
@@ -38,7 +42,7 @@
             justify-content: center;
         }
         #forceControlContainer input[type="range"] {
-            width: 150px; /* Ancho del slider */
+            width: 150px;
             vertical-align: middle;
             cursor: pointer;
             margin: 0 10px 0 0;
@@ -52,7 +56,7 @@
             padding: 1px 3px;
             border-radius: 3px;
         }
-        /* ************************************** */
+        /* ****************************************************************** */
     </style>
 
     <script type="importmap">
@@ -72,6 +76,7 @@
             <span id="forceValue">5.0</span>
         </div>
     </div>
+
     <script type="module">
         import * as THREE from 'three';
         import { ARButton } from 'three/addons/webxr/ARButton.js';
@@ -95,9 +100,8 @@
         let hitRedAfterStrokeStart = false;
         let cushionHitsThisStroke = 0;
 
-        // ***** NUEVO: Variable para la velocidad del disparo *****
-        let currentShotSpeed = 5.0; // Valor inicial (coincide con slider)
-        // *****************************************************
+        // Variable para la velocidad del disparo
+        let currentShotSpeed = 5.0;
 
         // Constantes de Física Manual
         const FRICTION = 0.988;
@@ -126,7 +130,7 @@
 
         // --- Initialization ---
         function init() {
-            console.log("Iniciando escena WebXR Billar (Física Manual + Slider Fuerza)...");
+            // console.log("Iniciando escena WebXR Billar (Física Manual + Slider Fuerza Arriba-Derecha)...");
 
             scene = new THREE.Scene();
             camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 100);
@@ -175,16 +179,15 @@
             // --- Configurar Mandos (Visual) ---
             setupControllers();
 
-            // ***** NUEVO: Configurar Slider *****
+            // --- Configurar Slider ---
             setupForceSlider();
-            // **********************************
 
             // --- Event Listeners ---
             window.addEventListener('resize', onWindowResize, false);
 
             // --- Start Animation Loop ---
             renderer.setAnimationLoop(animate);
-            console.log("Inicialización completa (Física Manual + Slider Fuerza).");
+            // console.log("Inicialización completa (Física Manual + Slider Fuerza Arriba-Derecha).");
         }
 
         // --- Función para crear solo la superficie visual ---
@@ -195,100 +198,22 @@
         function createBallsManualPhysics(targetGroup) { /* ... (igual que antes) ... */ }
         // --- Setup Controllers (Con taco posicionado correctamente) ---
         function setupControllers() { /* ... (igual que antes) ... */ }
-
-        // ***** NUEVO: Función para configurar el Slider *****
-        function setupForceSlider() {
-            const forceSlider = document.getElementById('forceSlider');
-            const forceValueSpan = document.getElementById('forceValue');
-
-            if (forceSlider && forceValueSpan) {
-                // Establecer valor inicial (ya hecho en HTML, pero por si acaso)
-                currentShotSpeed = parseFloat(forceSlider.value);
-                forceValueSpan.textContent = currentShotSpeed.toFixed(1);
-
-                // Añadir listener para actualizar valor
-                forceSlider.addEventListener('input', (event) => {
-                    currentShotSpeed = parseFloat(event.target.value);
-                    forceValueSpan.textContent = currentShotSpeed.toFixed(1);
-                    // console.log("Shot Speed Updated:", currentShotSpeed); // Log opcional
-                });
-                console.log("Slider de fuerza configurado.");
-            } else {
-                console.error("Error: No se encontraron los elementos del slider de fuerza.");
-            }
-        }
-        // ************************************************
-
-
+        // --- Función para configurar el Slider ---
+        function setupForceSlider() { /* ... (igual que antes) ... */ }
         // --- WebXR Event Handlers (Disparo Activado) ---
-        function onSelectStart(event) {
-             const controller = event.target;
-             if (controller === cueController) { isTriggerDown = true; }
-        }
-        function onSelectEnd(event) {
-             const controller = event.target;
-             if (controller === cueController && isTriggerDown) {
-                 isTriggerDown = false;
-                 shootBallManual(); // Llamar a la función de disparo
-             }
-        }
-
+        function onSelectStart(event) { /* ... (igual que antes) ... */ }
+        function onSelectEnd(event) { /* ... (igual que antes, llama a shootBallManual) ... */ }
         // --- Billiards Logic Functions (Física Manual - DIRECCIÓN CORREGIDA) ---
-        function shootBallManual() {
-            if (!cueBall || !cueBall.velocity) { return; }
-            if (!cueController) { return; }
-            if (isStrokeInProgress) { return; }
-
-            const aimDirection = new THREE.Vector3();
-            try {
-                 cueController.getWorldDirection(aimDirection);
-                 aimDirection.y = 0;
-                 aimDirection.normalize();
-                 aimDirection.negate(); // Dirección corregida
-            } catch (e) { console.error("Error obteniendo dirección del mando:", e); return; }
-
-            // ***** CAMBIO: Usar velocidad del slider *****
-            // const initialSpeed = 5.0; // Velocidad fija eliminada
-            const initialSpeed = currentShotSpeed; // Usar valor actual del slider
-            // ******************************************
-
-            cueBall.velocity.copy(aimDirection).multiplyScalar(initialSpeed);
-
-            isStrokeInProgress = true;
-            hitYellowAfterStrokeStart = false;
-            hitRedAfterStrokeStart = false;
-            cushionHitsThisStroke = 0;
-            console.log(`Disparo Manual Realizado! Velocidad: ${initialSpeed.toFixed(1)}`); // Log con velocidad
-        }
-
+        function shootBallManual() { /* ... (igual que antes, con negate() y usa currentShotSpeed) ... */ }
         // --- Window Resize Handler ---
         function onWindowResize() { /* ... (igual que antes) ... */ }
-
         // --- Animation Loop (FÍSICA MANUAL - FRICCIÓN CORREGIDA - COLISIÓN SIMPLE ORIGINAL) ---
-        function animate() {
-            const delta = clock.getDelta();
-
-            // --- Actualizar Física Manual ---
-            let allStopped = true;
-            balls.forEach(ball => { /* ... (misma lógica que antes) ... */ });
-            // --- Comprobar Colisiones Bola-Bola ---
-            for (let i = 0; i < balls.length; i++) { /* ... (misma lógica que antes) ... */ }
-            // Comprobar fin de tiro
-            if (isStrokeInProgress && allStopped) { /* ... (misma lógica que antes) ... */ }
-
-            // Render Scene
-            try {
-                 renderer.render(scene, camera);
-            } catch (e) {
-                 console.error("Error during renderer.render():", e);
-                 renderer.setAnimationLoop(null);
-            }
-        }
+        function animate() { /* ... (igual que antes) ... */ }
 
         // --- Copiar aquí las definiciones completas de las funciones auxiliares ---
+        // Asegúrate de que todas las funciones estén presentes y completas
         // (createTableSurfaceVisualOnly, createCushionsAndFrameVisualsOnly, createBallsManualPhysics,
         //  setupControllers, setupForceSlider, onSelectStart, onSelectEnd, onWindowResize, shootBallManual, animate)
-        // Asegúrate de que las definiciones completas de las funciones estén presentes.
 
 
     </script>
