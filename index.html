@@ -14,18 +14,20 @@
         }
         /* Estilos para Slider 3D */
         .dynamic-slider-container {
-            position: absolute;
-            background-color: rgba(50, 50, 50, 0.8);
+            position: absolute; /* Se posicionará con JS */
+            background-color: rgba(50, 50, 50, 0.8); /* Fondo semitransparente */
             padding: 15px;
             border-radius: 10px;
             color: white;
             z-index: 101;
-            font-size: 1em;
+            font-size: 1em; /* Tamaño fuente aumentado */
             text-align: center;
             width: 280px;
             border: 1px solid #888;
             box-shadow: 0 2px 5px rgba(0,0,0,0.5);
-            display: none; /* Oculto por defecto */
+            /* Oculto por defecto, se muestra con JS */
+            display: none;
+            /* Evitar que capture eventos de puntero del mundo 3D */
             pointer-events: none;
         }
         .dynamic-slider-container label {
@@ -39,17 +41,19 @@
             justify-content: center;
             margin-top: 5px;
         }
+        /* Estilo para la barra (input range) */
         .dynamic-slider-container input[type="range"] {
-            width: 180px;
+            width: 180px; /* Más ancho */
             height: 10px;
-            cursor: default;
+            cursor: default; /* No interactuable */
             margin: 0 10px 0 0;
-            appearance: none;
-            background: linear-gradient(to right, #0f0, #ff0, #f00);
+            appearance: none; /* Quitar estilo por defecto */
+            background: linear-gradient(to right, #0f0, #ff0, #f00); /* Gradiente de color */
             border-radius: 5px;
             outline: none;
         }
-        .dynamic-slider-container input[type="range"]::-webkit-slider-thumb {
+        /* Estilo para el 'pulgar' del slider (indicador) */
+        .dynamic-slider-container input[type="range"]::-webkit-slider-thumb { /* Chrome, Edge, Safari */
            appearance: none;
            width: 16px;
            height: 16px;
@@ -57,17 +61,17 @@
            border-radius: 50%;
            cursor: default;
         }
-        .dynamic-slider-container input[type="range"]::-moz-range-thumb {
+        .dynamic-slider-container input[type="range"]::-moz-range-thumb { /* Firefox */
            width: 16px;
            height: 16px;
            background: #fff;
            border-radius: 50%;
            cursor: default;
-           border: none;
+           border: none; /* Quitar borde por defecto en FF */
         }
-        .dynamic-slider-container span {
+        .dynamic-slider-container span { /* Valor numérico */
             display: inline-block;
-            min-width: 45px;
+            min-width: 45px; /* Más espacio */
             text-align: right;
             font-weight: bold;
             font-size: 1.1em;
@@ -327,13 +331,23 @@
         function setupControllers() {
              // console.log("Configurando mandos (Taco en Controller 2)...");
              controller1 = renderer.xr.getController(0); // Izquierda
-             if (controller1) { /* ... (añadir línea) ... */ }
+             if (controller1) {
+                 controller1.addEventListener('selectstart', onSelectStart);
+                 controller1.addEventListener('selectend', onSelectEnd);
+                 scene.add(controller1);
+                 const lineMaterial = new THREE.LineBasicMaterial({ color: 0xcccccc });
+                 const lineGeometry = new THREE.BufferGeometry().setFromPoints([ new THREE.Vector3(0, 0, 0), new THREE.Vector3(0, 0, -0.2) ]);
+                 const line1 = new THREE.Line(lineGeometry, lineMaterial);
+                 controller1.add(line1);
+             } else { console.error("¡No se pudo obtener el Controller 1!"); }
+
              controller2 = renderer.xr.getController(1); // Derecha
              if (controller2) {
                   controller2.addEventListener('selectstart', onSelectStart);
                   controller2.addEventListener('selectend', onSelectEnd);
                   scene.add(controller2);
                   cueController = controller2;
+
                   // Taco
                   const cueLength = 1.2;
                   const cueRadius = 0.01;
@@ -344,6 +358,7 @@
                   cueStickMesh.rotation.set(Math.PI / 2, 0, 0);
                   cueStickMesh.castShadow = true;
                   controller2.add(cueStickMesh);
+
                   // Línea de Mira
                   const aimLineMaterial = new THREE.LineBasicMaterial({ color: 0xff00ff });
                   const points = [new THREE.Vector3(0, 0, 0), new THREE.Vector3(0, 0, -1)];
@@ -351,6 +366,7 @@
                   aimLine = new THREE.Line(aimLineGeometry, aimLineMaterial);
                   aimLine.visible = false;
                   controller2.add(aimLine);
+
                   // Slider 3D
                   sliderGroup3D = new THREE.Group();
                   sliderGroup3D.visible = false;
@@ -374,6 +390,7 @@
                   sliderGroup3D.rotation.set(-Math.PI / 6, 0, 0);
                   controller2.add(sliderGroup3D);
                   // console.log("Slider 3D creado y añadido a Controller 2.");
+
              } else { console.error("¡No se pudo obtener el Controller 2!"); }
              // console.log("Mandos configurados.");
          }
@@ -442,7 +459,7 @@
             hitYellowAfterStrokeStart = false;
             hitRedAfterStrokeStart = false;
             cushionHitsThisStroke = 0;
-            // console.log(`Disparo Manual! Velocidad: ${mappedSpeed.toFixed(1)} (Slider: ${initialSpeedSlider.toFixed(1)})`);
+            // console.log(`¡Disparo Manual! Velocidad: ${mappedSpeed.toFixed(1)} (Slider: ${initialSpeedSlider.toFixed(1)})`);
             playSound(ballHitSynth, mappedSpeed, maxRealSpeed * 1.1, 'ball'); // Sonido al disparar
         }
 
@@ -500,6 +517,7 @@
              } else if (aimLine) {
                  aimLine.visible = false;
              }
+
 
             // --- Actualizar Física Manual ---
             let allStopped = true;
@@ -579,7 +597,7 @@
                             vel2.copy(vel2nVec).add(vel2tVec).multiplyScalar(ENERGY_LOSS_FACTOR);
 
                             // 8. Tocar sonido de bola
-                            playSound(ballHitSynth, v1n - v2n, 10, 'ball'); // Usar velocidad relativa normal como intensidad
+                            playSound(ballHitSynth, v1n - v2n, 10, 'ball');
 
                             // 9. Registrar golpes para puntuación
                             if (isStrokeInProgress) {
@@ -589,8 +607,8 @@
 
                             // 10. Corregir superposición
                             correction.copy(collisionNormal).multiplyScalar(overlap * 0.51);
-                            pos1.add(correction); // Mover bola 1
-                            pos2.sub(correction); // Mover bola 2
+                            pos1.add(correction);
+                            pos2.sub(correction);
                         }
                     }
                 }
@@ -622,4 +640,3 @@
     </script>
 </body>
 </html>
-
