@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
     <meta charset="utf-8">
-    <title>WebXR Billar - Física Manual + Colisión Mejorada</title> <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>WebXR Billar - Física Manual + Colisión 2D Mejorada</title> <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
     <style>
         body { margin: 0; overflow: hidden; font-family: monospace; background-color: #000; }
         canvas { display: block; }
@@ -140,9 +140,7 @@
         const MIN_VELOCITY_SQ = 0.0001;
         const CUSHION_RESTITUTION = 0.6;
         const BALL_RESTITUTION = 0.9; // Coeficiente de restitución para colisión bola-bola
-        // ***** NUEVO: Factor de pérdida de energía *****
         const ENERGY_LOSS_FACTOR = Math.sqrt(0.95); // sqrt(1 - 0.05) para pérdida del 5%
-        // ********************************************
 
         // Constantes de la mesa y bolas
         const ballRadius = 0.03075;
@@ -392,7 +390,7 @@
                 const noiseFilter = new Tone.Filter({type : 'bandpass', frequency : 1800, Q : 1.5}).toDestination();
                 ballHitSynth = new Tone.NoiseSynth({ noise: { type: 'white' }, envelope: { attack: 0.001, decay: 0.08, sustain: 0 }, volume: -8 }).connect(noiseFilter);
                 cushionHitSynth = new Tone.MembraneSynth({ pitchDecay: 0.06, octaves: 3, envelope: { attack: 0.001, decay: 0.25, sustain: 0.01, release: 0.1 }, volume: -6 }).toDestination();
-                console.log("Sintetizadores Tone.js creados.");
+                // console.log("Sintetizadores Tone.js creados.");
             } catch (e) { console.error("Error creando sintetizadores Tone.js:", e); }
         }
 
@@ -444,7 +442,7 @@
             hitYellowAfterStrokeStart = false;
             hitRedAfterStrokeStart = false;
             cushionHitsThisStroke = 0;
-            console.log(`Disparo Manual! Velocidad: ${mappedSpeed.toFixed(1)} (Slider: ${initialSpeedSlider.toFixed(1)})`);
+            // console.log(`Disparo Manual! Velocidad: ${mappedSpeed.toFixed(1)} (Slider: ${initialSpeedSlider.toFixed(1)})`);
             playSound(ballHitSynth, mappedSpeed, maxRealSpeed * 1.1, 'ball'); // Sonido al disparar
         }
 
@@ -547,7 +545,7 @@
                     const minDistSq = minDist * minDist;
 
                     // 1. Comprobar si hay colisión
-                    if (distSq < minDistSq && distSq > 1e-9) { // Evitar dividir por cero si están exactamente superpuestas
+                    if (distSq < minDistSq && distSq > 1e-9) {
                         const distance = Math.sqrt(distSq);
                         const overlap = minDist - distance;
 
@@ -561,17 +559,12 @@
                         const v2n = vel2.dot(collisionNormal);
                         const v2t = vel2.dot(collisionTangent);
 
-                        // 4. Solo actuar si se están acercando (componente normal relativa negativa)
-                        // (v1n es la velocidad de 1 hacia 2, v2n es la de 2 hacia 1 a lo largo de la normal)
-                        // Se acercan si v1n > v2n
+                        // 4. Solo actuar si se están acercando
                         if (v1n - v2n > 0) {
 
-                            // 5. Calcular nuevas velocidades a lo largo de la normal (intercambio para masas iguales)
-                            // Fórmula simplificada para masas iguales: v1n' = v2n, v2n' = v1n
-                            // Aplicar restitución (rebote)
-                            const newV1n = (v1n * (1 - BALL_RESTITUTION) + 2 * BALL_RESTITUTION * v2n) / 2; // Dividido por m1+m2 = 1+1=2
+                            // 5. Calcular nuevas velocidades a lo largo de la normal
+                            const newV1n = (v1n * (1 - BALL_RESTITUTION) + 2 * BALL_RESTITUTION * v2n) / 2;
                             const newV2n = (v2n * (1 - BALL_RESTITUTION) + 2 * BALL_RESTITUTION * v1n) / 2;
-                            // Las velocidades tangenciales no cambian
                             const newV1t = v1t;
                             const newV2t = v2t;
 
