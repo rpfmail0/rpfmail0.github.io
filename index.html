@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
     <meta charset="utf-8">
-    <title>WebXR Billar - Debug Joystick Axes v3</title> <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>WebXR Billar - Física Manual + Movimiento v2</title> <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
     <style>
         body { margin: 0; overflow: hidden; font-family: monospace; background-color: #000; }
         canvas { display: block; }
@@ -12,7 +12,7 @@
             right: 20px;
             z-index: 999;
         }
-        /* Estilos para Slider 3D */
+        /* Estilos para Slider 3D (Mantenidos por si se reactiva) */
         .dynamic-slider-container {
             position: absolute;
             background-color: rgba(50, 50, 50, 0.8);
@@ -57,12 +57,13 @@
         const balls = []; // Array para { mesh, velocity, name }
         let cueBall; // Referencia a la bola blanca
 
-        // Player Rig y Controles
-        let playerGroup;
-        const playerDirection = new THREE.Vector3();
-        const moveSpeed = 1.5;
-        const rotateSpeed = 1.5;
+        // ***** Player Rig y Controles *****
+        let playerGroup; // Grupo que representa al jugador (cámara + mandos)
+        const playerDirection = new THREE.Vector3(); // Dirección de movimiento calculada
+        const moveSpeed = 1.5; // Velocidad de movimiento (metros/segundo)
+        const rotateSpeed = 1.5; // Velocidad de rotación (radianes/segundo)
         // const clock = new THREE.Clock(); // Eliminado
+        // ***************************************
 
         // WebXR Controller Variables
         let controller1, controller2; // Mandos (0=izq, 1=der)
@@ -150,10 +151,11 @@
 
         // --- Initialization ---
         function init() {
-            console.log("Iniciando escena WebXR Billar (Debug Joystick Axes v3)..."); // Log actualizado
+            console.log("Iniciando escena WebXR Billar (Física Manual + Movimiento v2)..."); // Log actualizado
 
             scene = new THREE.Scene();
             camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 100);
+            // La posición de la cámara se define dentro del playerGroup
 
             renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
             renderer.setSize(window.innerWidth, window.innerHeight);
@@ -184,14 +186,14 @@
 
             // --- Player Rig ---
             playerGroup = new THREE.Group();
-            playerGroup.position.set(0, 1.6, tableSurfaceY + 1.0);
+            playerGroup.position.set(0, 1.6, tableSurfaceY + 1.0); // Posición inicial del jugador
             scene.add(playerGroup);
             playerGroup.add(camera); // Añadir cámara al rig
             console.log("Player group creado y añadido a la escena.");
 
             // --- Crear Grupo de la Mesa ---
             tableGroup = new THREE.Group();
-            tableGroup.position.set(0, tableSurfaceY, -1.5);
+            tableGroup.position.set(0, tableSurfaceY, -1.5); // Posición de la mesa en el mundo
             scene.add(tableGroup);
 
             // --- Crear Visuales de la Mesa ---
@@ -202,7 +204,7 @@
             createBallsManualPhysics(tableGroup);
 
             // --- Configurar Mandos (Visual y asignación de roles) ---
-            setupControllers();
+            setupControllers(); // Ahora también asigna move/rotate controllers
 
             // --- Crear Slider 3D --- (Se hace dentro de setupControllers)
 
@@ -461,24 +463,19 @@
             let ry = 0; // Rotación Y
             const deadzone = 0.1; // Zona muerta para joysticks
 
-            // ***** Log para confirmar llamada *****
-            // console.log("handleControllerInput llamado");
+            // console.log("handleControllerInput llamado"); // Log para ver si entra
 
             // --- Movimiento (Mando Izquierdo - controller1) ---
             if (moveController) {
-                if (moveController.gamepad) {
+                if (moveController.gamepad && moveController.gamepad.axes?.length >= 4) { // Comprobar gamepad y longitud de axes
                     const axes = moveController.gamepad.axes;
                     // ***** Loguear SIEMPRE los ejes del mando izquierdo *****
-                    if (axes && axes.length >= 4) { // Asegurarse de que axes existe y tiene longitud
-                        console.log(`DEBUG Mando Izq (Move): Axes = [${axes[0]?.toFixed(2)}, ${axes[1]?.toFixed(2)}, ${axes[2]?.toFixed(2)}, ${axes[3]?.toFixed(2)}]`);
-                    } else {
-                        console.log("DEBUG Mando Izq (Move): Axes array no válido o incompleto.");
-                    }
+                    console.log(`DEBUG Mando Izq (Move): Axes = [${axes[0]?.toFixed(2)}, ${axes[1]?.toFixed(2)}, ${axes[2]?.toFixed(2)}, ${axes[3]?.toFixed(2)}]`);
                     // *******************************************************
 
                     // Leer ejes (asumiendo 2=X, 3=Y) - AJUSTAR SEGÚN LOGS
-                    const joystickX = axes && axes.length > 2 ? axes[2] : 0;
-                    const joystickY = axes && axes.length > 3 ? axes[3] : 0; // Negativo es hacia adelante
+                    const joystickX = axes[2] || 0;
+                    const joystickY = axes[3] || 0; // Negativo es hacia adelante
 
                     // Aplicar zona muerta para el movimiento real
                     if (Math.abs(joystickX) > deadzone) {
@@ -488,32 +485,28 @@
                         dz = joystickY;
                     }
                 } else {
-                     // ***** Log si el gamepad no está disponible *****
-                     console.log("DEBUG Mando Izq (Move): Gamepad no disponible.");
+                     // ***** Log si el gamepad no está disponible o no tiene ejes suficientes *****
+                     // console.log(`DEBUG Mando Izq (Move): Gamepad ${moveController.gamepad ? 'existe pero sin suficientes ejes' : 'no disponible'}.`);
                 }
             }
 
             // --- Rotación (Mando Derecho - controller2) ---
              if (rotateController) {
-                 if (rotateController.gamepad) {
+                 if (rotateController.gamepad && rotateController.gamepad.axes?.length >= 3) { // Comprobar gamepad y longitud de axes
                      const axes = rotateController.gamepad.axes;
                      // ***** Loguear SIEMPRE los ejes del mando derecho *****
-                     if (axes && axes.length >= 3) { // Asegurar que axes existe y tiene longitud
-                        console.log(`DEBUG Mando Der (Rotate): Axes = [${axes[0]?.toFixed(2)}, ${axes[1]?.toFixed(2)}, ${axes[2]?.toFixed(2)}, ${axes[3]?.toFixed(2) ?? 'N/A'}]`);
-                     } else {
-                        console.log("DEBUG Mando Der (Rotate): Axes array no válido o incompleto.");
-                     }
+                     console.log(`DEBUG Mando Der (Rotate): Axes = [${axes[0]?.toFixed(2)}, ${axes[1]?.toFixed(2)}, ${axes[2]?.toFixed(2)}, ${axes[3]?.toFixed(2) ?? 'N/A'}]`);
                      // *******************************************************
 
                      // Usar eje X (índice 2) del joystick derecho para rotar - AJUSTAR SEGÚN LOGS
-                     const joystickX = axes && axes.length > 2 ? axes[2] : 0;
+                     const joystickX = axes[2] || 0;
                      // Aplicar zona muerta para la rotación real
-                     if (Math.abs(joystickX) > deadzone + 0.05) {
+                     if (Math.abs(joystickX) > deadzone + 0.05) { // Umbral un poco mayor para rotación
                          ry = -joystickX;
                      }
                  } else {
-                      // ***** Log si el gamepad no está disponible *****
-                      console.log("DEBUG Mando Der (Rotate): Gamepad no disponible.");
+                      // ***** Log si el gamepad no está disponible o no tiene ejes suficientes *****
+                      // console.log(`DEBUG Mando Der (Rotate): Gamepad ${rotateController.gamepad ? 'existe pero sin suficientes ejes' : 'no disponible'}.`);
                  }
              }
 
@@ -526,14 +519,14 @@
 
                 // Movimiento
                 if (dx !== 0 || dz !== 0) {
-                    playerGroup.getWorldDirection(worldDirection);
+                    playerGroup.getWorldDirection(worldDirection); // Z negativo local del grupo
                     worldDirection.y = 0;
                     worldDirection.normalize();
-                    rightDirection.crossVectors(playerGroup.up, worldDirection).normalize();
+                    rightDirection.crossVectors(playerGroup.up, worldDirection).normalize(); // X positivo local del grupo
                     playerDirection.set(0, 0, 0);
                     playerDirection.add(worldDirection.multiplyScalar(dz));
                     playerDirection.add(rightDirection.multiplyScalar(dx));
-                    const moveDistance = moveSpeed * delta;
+                    const moveDistance = moveSpeed * delta; // Usar delta (timeStep)
                     const moveVector = playerDirection.multiplyScalar(moveDistance);
                     playerGroup.position.add(moveVector);
                 }
