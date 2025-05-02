@@ -2,8 +2,7 @@
 <html lang="es">
 <head>
     <meta charset="utf-8">
-    <title>WebXR Test - Rotación Joystick</title>
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>WebXR Test - Rotación Joystick v2</title> <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
     <style>
         body { margin: 0; overflow: hidden; font-family: monospace; background-color: #000; }
         canvas { display: block; }
@@ -36,17 +35,16 @@
         let controller1, controller2; // Mandos
         let rotateController = null; // Mando para girar (controller2)
         const rotateSpeed = 1.5; // Velocidad de rotación
-        const timeStep = 1 / 90; // Paso de tiempo fijo (aunque no haya física)
+        const timeStep = 1 / 90; // Paso de tiempo fijo
 
         init();
 
         // --- Initialization ---
         function init() {
-            console.log("Iniciando Test Rotación Joystick...");
+            console.log("Iniciando Test Rotación Joystick v2..."); // Log actualizado
 
             scene = new THREE.Scene();
             camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 100);
-            // La cámara se posiciona relativa al playerGroup
 
             renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
             renderer.setSize(window.innerWidth, window.innerHeight);
@@ -66,17 +64,17 @@
 
             // --- Player Rig ---
             playerGroup = new THREE.Group();
-            playerGroup.position.set(0, 1.6, 0); // Posición inicial del jugador
+            playerGroup.position.set(0, 1.6, 0);
             scene.add(playerGroup);
-            playerGroup.add(camera); // Añadir cámara al rig
+            playerGroup.add(camera);
             console.log("Player group creado.");
 
             // --- Cubo Azul ---
             const geometry = new THREE.BoxGeometry(0.2, 0.2, 0.2);
-            const material = new THREE.MeshStandardMaterial({ color: 0x0000ff }); // Azul
+            const material = new THREE.MeshStandardMaterial({ color: 0x0000ff });
             cubeMesh = new THREE.Mesh(geometry, material);
-            cubeMesh.position.set(0, 1.6, -1.5); // Posicionar el cubo delante del jugador
-            scene.add(cubeMesh);
+            cubeMesh.position.set(0, 0, -1.5); // Posicionar relativo al playerGroup
+            playerGroup.add(cubeMesh); // Añadir al playerGroup para que rote con él
             console.log("Cubo azul creado.");
 
             // --- Configurar Mandos ---
@@ -96,7 +94,7 @@
              // Controller 1 (Izquierda)
              controller1 = renderer.xr.getController(0);
              if (controller1) {
-                  playerGroup.add(controller1); // Añadir al playerGroup
+                  playerGroup.add(controller1);
                   const lineMaterial = new THREE.LineBasicMaterial({ color: 0xcccccc });
                   const lineGeometry = new THREE.BufferGeometry().setFromPoints([ new THREE.Vector3(0, 0, 0), new THREE.Vector3(0, 0, -0.2) ]);
                   const line1 = new THREE.Line(lineGeometry, lineMaterial);
@@ -107,9 +105,8 @@
              // Controller 2 (Derecha - Rotación)
              controller2 = renderer.xr.getController(1);
              if (controller2) {
-                  playerGroup.add(controller2); // Añadir al playerGroup
-                  rotateController = controller2; // Asignar rol de rotación
-                   // Añadir una pequeña esfera para visualizar el mando derecho
+                  playerGroup.add(controller2);
+                  rotateController = controller2;
                   const sphereGeo = new THREE.SphereGeometry(0.03);
                   const sphereMat = new THREE.MeshBasicMaterial({color: 0xff8800});
                   const sphere = new THREE.Mesh(sphereGeo, sphereMat);
@@ -119,36 +116,37 @@
              console.log("Mandos configurados.");
          }
 
-        // --- Función para manejar Input de Mandos (SOLO ROTACIÓN JUGADOR + LOGS DETALLADOS) ---
+        // --- Función para manejar Input de Mandos (SOLO ROTACIÓN JUGADOR + LOGS MÁS DETALLADOS) ---
         function handleControllerInput(delta) { // delta es timeStep fijo
             let ry = 0; // Rotación Y
             const deadzone = 0.1;
 
-            // console.log("handleControllerInput llamado"); // Descomentar si es necesario
+            // console.log("handleControllerInput llamado"); // Log para ver si entra
 
             // --- Rotación (Mando Derecho - controller2) ---
              if (rotateController) {
-                 if (rotateController.gamepad) { // Comprobar si el gamepad está listo
+                 // ***** CAMBIO: Comprobar gamepad y loguear siempre si existe *****
+                 if (rotateController.gamepad) {
                      const axes = rotateController.gamepad.axes;
-                     // ***** Loguear SIEMPRE los ejes del mando derecho *****
-                     if (axes && axes.length >= 4) { // Asegurar que axes existe y tiene longitud
-                        console.log(`DEBUG Mando Der (Rotate): Axes = [${axes[0]?.toFixed(2)}, ${axes[1]?.toFixed(2)}, ${axes[2]?.toFixed(2)}, ${axes[3]?.toFixed(2)}]`);
-                     } else {
-                        console.log(`DEBUG Mando Der (Rotate): Axes array no válido o incompleto. Length: ${axes?.length}`);
-                     }
-                     // *******************************************************
+                     // Loguear siempre el array de ejes si existe el gamepad
+                     console.log(`DEBUG Mando Der (Rotate): Gamepad OK. Axes = [${axes?.map(a => a?.toFixed(2) ?? 'N/A').join(', ')}]`);
 
-                     // Usar eje X (índice 2) del joystick derecho para rotar - AJUSTAR SEGÚN LOGS
-                     const joystickX = axes && axes.length > 2 ? axes[2] : 0;
-                     // Aplicar zona muerta para la rotación real
-                     if (Math.abs(joystickX) > deadzone + 0.05) {
-                         ry = -joystickX; // Invertido para que derecha rote a la derecha (sentido horario)
-                         console.log(`DEBUG: Rotación detectada ry = ${ry.toFixed(3)} (joystickX = ${joystickX.toFixed(3)})`); // Log cuando se detecta rotación
+                     // Intentar leer el eje 2 para rotación (índice común para joystick X derecho)
+                     if (axes && axes.length >= 3) { // Asegurarse de que el índice 2 existe
+                         const joystickX = axes[2] || 0;
+                         // Aplicar zona muerta para la rotación real
+                         if (Math.abs(joystickX) > deadzone + 0.05) {
+                             ry = -joystickX; // Invertido para que derecha rote a la derecha (sentido horario)
+                             // console.log(`DEBUG: Rotación detectada ry = ${ry.toFixed(3)} (joystickX = ${joystickX.toFixed(3)})`);
+                         }
+                     } else {
+                         // console.log("DEBUG Mando Der (Rotate): Axes array no válido o incompleto.");
                      }
                  } else {
                       // Log si el mando existe pero el gamepad no está disponible
-                      // console.log("DEBUG Mando Der (Rotate): Gamepad no disponible.");
+                      console.log("DEBUG Mando Der (Rotate): Gamepad NO disponible.");
                  }
+                 // ***** FIN CAMBIO *****
              } else {
                  // console.log("DEBUG: rotateController no asignado.");
              }
@@ -156,7 +154,7 @@
             // --- Aplicar Rotación al Player Rig ---
             if (playerGroup && ry !== 0) {
                 playerGroup.rotation.y += ry * rotateSpeed * delta; // Usar delta (timeStep)
-                // console.log(`DEBUG: Rotando playerGroup.rotation.y = ${playerGroup.rotation.y.toFixed(3)}`); // Log al aplicar rotación
+                // console.log(`DEBUG: Rotando playerGroup.rotation.y = ${playerGroup.rotation.y.toFixed(3)}`);
             }
         }
 
