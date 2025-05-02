@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
     <meta charset="utf-8">
-    <title>WebXR Billar - Física Manual + Rotación Jugador v5</title> <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>WebXR Billar - Debug Gamepad Availability</title> <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
     <style>
         body { margin: 0; overflow: hidden; font-family: monospace; background-color: #000; }
         canvas { display: block; }
@@ -50,7 +50,7 @@
     <script type="module">
         import * as THREE from 'three';
         import { ARButton } from 'three/addons/webxr/ARButton.js';
-        import { XRControllerModelFactory } from 'three/addons/webxr/XRControllerModelFactory.js'; // Importar
+        import { XRControllerModelFactory } from 'three/addons/webxr/XRControllerModelFactory.js';
 
         // --- Global Variables ---
         let camera, scene, renderer;
@@ -58,18 +58,17 @@
         const balls = []; // Array para { mesh, velocity, name }
         let cueBall; // Referencia a la bola blanca
 
-        // ***** Player Rig y Controles *****
-        let playerGroup; // Grupo que representa al jugador (cámara + mandos)
-        const playerDirection = new THREE.Vector3(); // Dirección de movimiento calculada
-        const moveSpeed = 1.5; // Velocidad de movimiento (metros/segundo)
-        const rotateSpeed = 1.5; // Velocidad de rotación (radianes/segundo)
+        // Player Rig y Controles
+        let playerGroup;
+        const playerDirection = new THREE.Vector3();
+        const moveSpeed = 1.5;
+        const rotateSpeed = 1.5;
         // const clock = new THREE.Clock(); // Eliminado
-        // ***************************************
 
         // WebXR Controller Variables
         let controller1, controller2; // Mandos (0=izq, 1=der)
         let cueController = null; // Mando para disparar (controller2)
-        let moveController = null; // Mando para moverse (controller1) - No usado ahora
+        // let moveController = null; // No se usa para movimiento ahora
         let rotateController = null; // Mando para girar (controller2)
         let cueStickMesh; // Visual del taco
         let aimLine;
@@ -147,12 +146,15 @@
         const worldDirection = new THREE.Vector3(); // Para movimiento
         const rightDirection = new THREE.Vector3(); // Para movimiento
 
+        // ***** NUEVO: Variable para controlar log de gamepad *****
+        let lastGamepadLogTime = 0;
+        // *******************************************************
 
         init();
 
         // --- Initialization ---
         function init() {
-            console.log("Iniciando escena WebXR Billar (Física Manual + Rotación Jugador v4)..."); // Log actualizado
+            console.log("Iniciando escena WebXR Billar (Debug Gamepad Availability)..."); // Log actualizado
 
             scene = new THREE.Scene();
             camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 100);
@@ -328,7 +330,7 @@
                   controller1.addEventListener('selectstart', onSelectStart);
                   controller1.addEventListener('selectend', onSelectEnd);
                   playerGroup.add(controller1); // Añadir al playerGroup
-                  moveController = controller1; // Asignar rol de movimiento
+                  moveController = controller1;
                   const controllerGrip1 = renderer.xr.getControllerGrip(0);
                   if (controllerGrip1) {
                       controllerGrip1.add(controllerModelFactory.createControllerModel(controllerGrip1));
@@ -343,8 +345,8 @@
                   controller2.addEventListener('selectstart', onSelectStart);
                   controller2.addEventListener('selectend', onSelectEnd);
                   playerGroup.add(controller2); // Añadir al playerGroup
-                  cueController = controller2; // Asignar rol de disparo
-                  rotateController = controller2; // Asignar rol de rotación
+                  cueController = controller2;
+                  rotateController = controller2;
                   const controllerGrip2 = renderer.xr.getControllerGrip(1);
                    if (controllerGrip2) {
                       controllerGrip2.add(controllerModelFactory.createControllerModel(controllerGrip2));
@@ -412,6 +414,9 @@
         // --- WebXR Event Handlers (Manejar aiming y disparo + Activar Audio) ---
         function onSelectStart(event) {
              const controller = event.target;
+             // ***** Log para ver si el gamepad está disponible EN EL EVENTO *****
+             console.log(`DEBUG onSelectStart - Gamepad controller ${controller === controller1 ? '1' : '2'}:`, controller.gamepad);
+             // ******************************************************************
              if (controller === cueController && !isStrokeInProgress) {
                  isTriggerDown = true;
                  isAiming = true;
@@ -497,8 +502,11 @@
                  // ***** CAMBIO: Comprobación más robusta de gamepad y axes *****
                  if (rotateController.gamepad && Array.isArray(rotateController.gamepad.axes)) { // Comprobar si es un array
                      const axes = rotateController.gamepad.axes;
-                     // Loguear siempre el array de ejes si existe el gamepad
-                     console.log(`DEBUG Mando Der (Rotate): Gamepad OK. Axes = [${axes.map(a => a?.toFixed(2) ?? 'N/A').join(', ')}]`);
+                     // ***** Loguear SIEMPRE los ejes del mando derecho *****
+                     // Solo loguear si hay algún valor distinto de cero para no llenar consola
+                     if (axes.some(axis => Math.abs(axis) > 0.01)) {
+                        console.log(`DEBUG Mando Der (Rotate): Gamepad OK. Axes = [${axes.map(a => a?.toFixed(2) ?? 'N/A').join(', ')}]`);
+                     }
 
                      // Intentar leer el eje 2 para rotación (índice común para joystick X derecho)
                      if (axes.length >= 3) { // Asegurarse de que el índice 2 existe
@@ -509,11 +517,11 @@
                              // console.log(`DEBUG: Rotación detectada ry = ${ry.toFixed(3)} (joystickX = ${joystickX.toFixed(3)})`);
                          }
                      } else {
-                         console.log("DEBUG Mando Der (Rotate): Axes array no tiene índice 2.");
+                         // console.log("DEBUG Mando Der (Rotate): Axes array no tiene índice 2.");
                      }
                  } else {
                       // Log si el mando existe pero el gamepad no está disponible o axes no es array
-                      console.log(`DEBUG Mando Der (Rotate): Gamepad ${rotateController.gamepad ? 'existe pero axes no es array válido' : 'NO disponible'}.`);
+                      // console.log(`DEBUG Mando Der (Rotate): Gamepad ${rotateController.gamepad ? 'existe pero axes no es array válido' : 'NO disponible'}.`);
                  }
                  // ***** FIN CAMBIO *****
              } else {
