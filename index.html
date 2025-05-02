@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
     <meta charset="utf-8">
-    <title>WebXR Billar - Física Manual + Rotación Jugador Final</title> <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>WebXR Billar - Física Manual + Slider 3D + Sonido</title> <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
     <style>
         body { margin: 0; overflow: hidden; font-family: monospace; background-color: #000; }
         canvas { display: block; }
@@ -58,19 +58,9 @@
         const balls = []; // Array para { mesh, velocity, name }
         let cueBall; // Referencia a la bola blanca
 
-        // ***** Player Rig y Controles *****
-        let playerGroup; // Grupo que representa al jugador (cámara + mandos)
-        // const playerDirection = new THREE.Vector3(); // No se usa para movimiento ahora
-        // const moveSpeed = 1.5; // No se usa para movimiento ahora
-        const rotateSpeed = 1.5; // Velocidad de rotación (radianes/segundo)
-        // const clock = new THREE.Clock(); // Eliminado
-        // ***************************************
-
         // WebXR Controller Variables
-        // let controller1, controller2; // No almacenar globales para input
-        let cueController = null; // Aún necesario para saber cuál dispara
-        // let moveController = null; // No se usa para movimiento ahora
-        // let rotateController = null; // No necesario almacenar globalmente
+        let controller1, controller2; // Mandos (0=izq, 1=der)
+        let cueController = null; // Mando para disparar (controller2)
         let cueStickMesh; // Visual del taco
         let aimLine;
         let isTriggerDown = false;
@@ -126,7 +116,7 @@
         const MIN_Z = -tableHeight / 2 + ballRadius;
         const MAX_Z = tableHeight / 2 - ballRadius;
 
-        // Paso de tiempo fijo para física manual y movimiento
+        // Paso de tiempo fijo para física manual
         const timeStep = 1 / 90;
 
         // Variables temporales para cálculos
@@ -144,18 +134,18 @@
         const vel2tVec = new THREE.Vector3();
         const impulseVec = new THREE.Vector3();
         const correction = new THREE.Vector3();
-        // const worldDirection = new THREE.Vector3(); // No necesario ahora
-        // const rightDirection = new THREE.Vector3(); // No necesario ahora
 
 
         init();
 
         // --- Initialization ---
         function init() {
-            console.log("Iniciando escena WebXR Billar (Física Manual + Rotación Jugador Final)...");
+            console.log("Iniciando escena WebXR Billar (Física Manual + Slider 3D + Sonido - Estable)..."); // Log actualizado
 
             scene = new THREE.Scene();
             camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 100);
+            camera.position.set(0, tableSurfaceY + 1.5, 1); // Posición fija cámara
+            scene.add(camera); // Añadir cámara a la escena
 
             renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
             renderer.setSize(window.innerWidth, window.innerHeight);
@@ -184,12 +174,7 @@
             spotLight.shadow.bias = -0.0005;
             scene.add(spotLight);
 
-            // --- Player Rig ---
-            playerGroup = new THREE.Group();
-            playerGroup.position.set(0, 1.6, tableSurfaceY + 1.0); // Posición inicial del jugador
-            scene.add(playerGroup);
-            playerGroup.add(camera); // Añadir cámara al rig
-            console.log("Player group creado y añadido a la escena.");
+            // --- NO hay Player Rig ---
 
             // --- Crear Grupo de la Mesa ---
             tableGroup = new THREE.Group();
@@ -204,8 +189,8 @@
             // --- Crear LAS TRES BOLAS (Visual + Propiedad Velocity) ---
             createBallsManualPhysics(tableGroup);
 
-            // --- Configurar Mandos (Visual y asignación de roles) ---
-            setupControllers(); // Añade mandos al playerGroup
+            // --- Configurar Mandos (Visual) ---
+            setupControllers(); // Añade mandos a la escena
 
             // --- Crear Slider 3D --- (Se hace dentro de setupControllers)
 
@@ -227,7 +212,7 @@
         // --- Función para crear LAS TRES bolas (Visual + Velocity) ---
         function createBallsManualPhysics(targetGroup) { /* ... (igual que antes) ... */ }
 
-        // --- Setup Controllers (Asignar roles y añadir a playerGroup) ---
+        // --- Setup Controllers (Añadir a la escena directamente) ---
         function setupControllers() {
              console.log("  [setupControllers] Configurando mandos...");
              const controllerModelFactory = new XRControllerModelFactory();
@@ -235,16 +220,15 @@
              // Controller 1 (Izquierda)
              const controller1 = renderer.xr.getController(0);
              if (controller1) {
-                  controller1.addEventListener('selectstart', onSelectStart);
-                  controller1.addEventListener('selectend', onSelectEnd);
-                  playerGroup.add(controller1);
-                  // moveController = controller1; // No asignar globalmente para input
-                  const controllerGrip1 = renderer.xr.getControllerGrip(0);
-                  if (controllerGrip1) {
-                      controllerGrip1.add(controllerModelFactory.createControllerModel(controllerGrip1));
-                      playerGroup.add(controllerGrip1);
-                  }
-                  // console.log("    Mando 1 (Izquierda) configurado.");
+                 controller1.addEventListener('selectstart', onSelectStart);
+                 controller1.addEventListener('selectend', onSelectEnd);
+                 scene.add(controller1); // Añadir a la escena
+                 const controllerGrip1 = renderer.xr.getControllerGrip(0);
+                 if (controllerGrip1) {
+                     controllerGrip1.add(controllerModelFactory.createControllerModel(controllerGrip1));
+                     scene.add(controllerGrip1); // Añadir grip a la escena
+                 }
+                 // console.log("    Mando 1 (Izquierda) configurado.");
              } else { console.error("¡No se pudo obtener el Controller 1!"); }
 
              // Controller 2 (Derecha)
@@ -252,13 +236,12 @@
              if (controller2) {
                   controller2.addEventListener('selectstart', onSelectStart);
                   controller2.addEventListener('selectend', onSelectEnd);
-                  playerGroup.add(controller2);
+                  scene.add(controller2); // Añadir a la escena
                   cueController = controller2; // Asignar para disparo
-                  // rotateController = controller2; // No asignar globalmente para input
                   const controllerGrip2 = renderer.xr.getControllerGrip(1);
                    if (controllerGrip2) {
                       controllerGrip2.add(controllerModelFactory.createControllerModel(controllerGrip2));
-                      playerGroup.add(controllerGrip2);
+                      scene.add(controllerGrip2); // Añadir grip a la escena
                   }
                   // Taco
                   const cueLength = 1.2;
@@ -322,59 +305,18 @@
         // --- Función para reproducir Sonido ---
         function playSound(synth, velocity, maxVelocity, type) { /* ... (igual que antes) ... */ }
 
-        // --- Función para manejar Input de Mandos (DESDE InputSources) ---
-        function handleControllerInput(delta) { // delta es timeStep fijo
-            let ry = 0; // Rotación Y
-            const deadzone = 0.1;
-            let rightHandInputSource = null;
-
-            // Obtener la sesión XR actual
-            const session = renderer.xr.getSession();
-            if (!session) return; // Salir si no hay sesión
-
-            // Iterar sobre las fuentes de entrada (mandos)
-            for (const source of session.inputSources) {
-                // Identificar el mando derecho
-                if (source.handedness === 'right') {
-                    rightHandInputSource = source;
-                    break; // Salir del bucle una vez encontrado
-                }
-            }
-
-            // --- Rotación (Mando Derecho) ---
-             if (rightHandInputSource) {
-                 if (rightHandInputSource.gamepad && Array.isArray(rightHandInputSource.gamepad.axes)) {
-                     const axes = rightHandInputSource.gamepad.axes;
-                     // Loguear solo si hay movimiento significativo (opcional, quitar si funciona)
-                     // if (axes.some(axis => Math.abs(axis) > 0.01)) {
-                     //    console.log(`DEBUG Mando Der (InputSource): Gamepad OK. Axes = [${axes.map(a => a?.toFixed(2) ?? 'N/A').join(', ')}]`);
-                     // }
-
-                     // Leer el eje 2 para rotación
-                     if (axes.length >= 3) {
-                         const joystickX = axes[2] || 0;
-                         if (Math.abs(joystickX) > deadzone + 0.05) {
-                             ry = -joystickX; // Invertido para rotación natural
-                         }
-                     }
-                 }
-             }
-
-            // --- Aplicar Rotación al Player Rig ---
-            if (playerGroup && ry !== 0) {
-                playerGroup.rotation.y += ry * rotateSpeed * delta; // Aplicar rotación
-            }
+        // --- Función para manejar Input de Mandos (DESACTIVADA) ---
+        function handleControllerInput(delta) {
+            // Lógica de rotación/movimiento desactivada
         }
 
 
-        // --- Animation Loop (FÍSICA MANUAL + SLIDER + SONIDO + COLISIÓN MEJORADA + ROTACIÓN JUGADOR) ---
+        // --- Animation Loop (FÍSICA MANUAL + SLIDER + SONIDO + COLISIÓN MEJORADA) ---
         function animate() {
             const elapsedTime = performance.now() / 1000; // Tiempo para oscilación
 
-            // --- Manejar Input de Mandos (SOLO ROTACIÓN) ---
-            if (renderer.xr.isPresenting) {
-                 try { handleControllerInput(timeStep); } catch (e) { console.error("Error en handleControllerInput:", e); } // Pasar timeStep fijo
-            }
+            // --- Manejar Input de Mandos (DESACTIVADO) ---
+            // if (renderer.xr.isPresenting) { handleControllerInput(timeStep); }
 
             // Actualizar Slider 3D si estamos apuntando
             if (isAiming && sliderGroup3D && sliderHandle) {
@@ -397,7 +339,7 @@
                      positions.setXYZ(1, farPointLocal.x, farPointLocal.y, farPointLocal.z);
                      positions.needsUpdate = true;
                      aimLine.geometry.computeBoundingSphere();
-                     aimLine.visible = !isAiming;
+                     aimLine.visible = !isAiming; // Mostrar solo si NO estamos cargando
                  } catch (e) { if(aimLine) aimLine.visible = false; }
              } else if (aimLine) {
                  aimLine.visible = false;
@@ -406,11 +348,92 @@
 
             // --- Actualizar Física Manual ---
             let allStopped = true;
-            balls.forEach(ball => { /* ... (misma lógica que antes) ... */ });
-            // --- Lógica de Colisión Bola-Bola Mejorada ---
-            for (let i = 0; i < balls.length; i++) { /* ... (misma lógica que antes) ... */ }
-            // --- Comprobar fin de tiro ---
-            if (isStrokeInProgress && allStopped) { /* ... (misma lógica que antes) ... */ }
+            balls.forEach(ball => {
+                if (!ball || !ball.velocity || !ball.mesh) return;
+                const velSq = ball.velocity.lengthSq();
+                if (velSq > MIN_VELOCITY_SQ) {
+                    allStopped = false;
+                    ball.velocity.multiplyScalar(FRICTION);
+                    deltaPos.copy(ball.velocity).multiplyScalar(timeStep); // Usar timeStep fijo
+                    ball.mesh.position.add(deltaPos);
+                    // Colisiones con Bandas y SONIDO
+                    let hitCushion = false;
+                    let impactVel = 0;
+                    if (ball.mesh.position.x < MIN_X) { impactVel = Math.abs(ball.velocity.x); ball.mesh.position.x = MIN_X; ball.velocity.x *= -CUSHION_RESTITUTION; hitCushion = true; }
+                    else if (ball.mesh.position.x > MAX_X) { impactVel = Math.abs(ball.velocity.x); ball.mesh.position.x = MAX_X; ball.velocity.x *= -CUSHION_RESTITUTION; hitCushion = true; }
+                    if (ball.mesh.position.z < MIN_Z) { impactVel = Math.abs(ball.velocity.z); ball.mesh.position.z = MIN_Z; ball.velocity.z *= -CUSHION_RESTITUTION; hitCushion = true; }
+                    else if (ball.mesh.position.z > MAX_Z) { impactVel = Math.abs(ball.velocity.z); ball.mesh.position.z = MAX_Z; ball.velocity.z *= -CUSHION_RESTITUTION; hitCushion = true; }
+                    if (hitCushion) {
+                        playSound(cushionHitSynth, impactVel, 5, 'cushion');
+                        if (ball.name === 'white' && isStrokeInProgress) { cushionHitsThisStroke++; }
+                    }
+                } else if (velSq > 0) {
+                    ball.velocity.set(0, 0, 0);
+                }
+            });
+
+            // Lógica de Colisión Bola-Bola Mejorada
+            for (let i = 0; i < balls.length; i++) {
+                for (let j = i + 1; j < balls.length; j++) {
+                    const ball1 = balls[i];
+                    const ball2 = balls[j];
+                    if (!ball1.mesh || !ball2.mesh || !ball1.velocity || !ball2.velocity) continue;
+
+                    const pos1 = ball1.mesh.position;
+                    const pos2 = ball2.mesh.position;
+                    const vel1 = ball1.velocity;
+                    const vel2 = ball2.velocity;
+
+                    deltaPos.copy(pos1).sub(pos2);
+                    const distSq = deltaPos.lengthSq();
+                    const minDist = ballRadius * 2;
+                    const minDistSq = minDist * minDist;
+
+                    if (distSq < minDistSq && distSq > 1e-9) {
+                        const distance = Math.sqrt(distSq);
+                        const overlap = minDist - distance;
+                        collisionNormal.copy(deltaPos).divideScalar(distance);
+                        collisionTangent.set(-collisionNormal.z, 0, collisionNormal.x);
+                        const v1n = vel1.dot(collisionNormal);
+                        const v1t = vel1.dot(collisionTangent);
+                        const v2n = vel2.dot(collisionNormal);
+                        const v2t = vel2.dot(collisionTangent);
+
+                        if (v1n - v2n > 0) {
+                            const newV1n = (v1n * (1 - BALL_RESTITUTION) + 2 * BALL_RESTITUTION * v2n) / 2;
+                            const newV2n = (v2n * (1 - BALL_RESTITUTION) + 2 * BALL_RESTITUTION * v1n) / 2;
+                            const newV1t = v1t;
+                            const newV2t = v2t;
+                            vel1nVec.copy(collisionNormal).multiplyScalar(newV1n);
+                            vel1tVec.copy(collisionTangent).multiplyScalar(newV1t);
+                            vel2nVec.copy(collisionNormal).multiplyScalar(newV2n);
+                            vel2tVec.copy(collisionTangent).multiplyScalar(newV2t);
+                            vel1.copy(vel1nVec).add(vel1tVec).multiplyScalar(ENERGY_LOSS_FACTOR);
+                            vel2.copy(vel2nVec).add(vel2tVec).multiplyScalar(ENERGY_LOSS_FACTOR);
+                            playSound(ballHitSynth, v1n - v2n, 10, 'ball');
+                            if (isStrokeInProgress) {
+                                if ((ball1.name === 'white' && ball2.name === 'yellow') || (ball1.name === 'yellow' && ball2.name === 'white')) { if (!hitYellowAfterStrokeStart) hitYellowAfterStrokeStart = true; }
+                                if ((ball1.name === 'white' && ball2.name === 'red') || (ball1.name === 'red' && ball2.name === 'white')) { if (!hitRedAfterStrokeStart) hitRedAfterStrokeStart = true; }
+                            }
+                            correction.copy(collisionNormal).multiplyScalar(overlap * 0.51);
+                            pos1.add(correction);
+                            pos2.sub(correction);
+                        }
+                    }
+                }
+            }
+
+            // Comprobar fin de tiro
+            if (isStrokeInProgress && allStopped) {
+                 if (hitYellowAfterStrokeStart && hitRedAfterStrokeStart && cushionHitsThisStroke >= 3) {
+                     score++;
+                     console.log(`¡CARAMBOLA A 3 BANDAS (Manual)! Puntuación: ${score}`);
+                 }
+                 isStrokeInProgress = false;
+                 hitYellowAfterStrokeStart = false;
+                 hitRedAfterStrokeStart = false;
+                 cushionHitsThisStroke = 0;
+            }
 
             // Render Scene
             try {
