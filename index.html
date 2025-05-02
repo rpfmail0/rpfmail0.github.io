@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
     <meta charset="utf-8">
-    <title>WebXR Billar - Física Manual + Movimiento v2</title> <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>WebXR Billar - Mover SetupControllers al Final</title> <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
     <style>
         body { margin: 0; overflow: hidden; font-family: monospace; background-color: #000; }
         canvas { display: block; }
@@ -12,7 +12,7 @@
             right: 20px;
             z-index: 999;
         }
-        /* Estilos para Slider 3D (Mantenidos por si se reactiva) */
+        /* Estilos para Slider 3D */
         .dynamic-slider-container {
             position: absolute;
             background-color: rgba(50, 50, 50, 0.8);
@@ -57,13 +57,12 @@
         const balls = []; // Array para { mesh, velocity, name }
         let cueBall; // Referencia a la bola blanca
 
-        // ***** Player Rig y Controles *****
+        // Player Rig y Controles
         let playerGroup; // Grupo que representa al jugador (cámara + mandos)
         const playerDirection = new THREE.Vector3(); // Dirección de movimiento calculada
         const moveSpeed = 1.5; // Velocidad de movimiento (metros/segundo)
         const rotateSpeed = 1.5; // Velocidad de rotación (radianes/segundo)
         // const clock = new THREE.Clock(); // Eliminado
-        // ***************************************
 
         // WebXR Controller Variables
         let controller1, controller2; // Mandos (0=izq, 1=der)
@@ -151,11 +150,10 @@
 
         // --- Initialization ---
         function init() {
-            console.log("Iniciando escena WebXR Billar (Física Manual + Movimiento v2)..."); // Log actualizado
+            console.log("Iniciando escena WebXR Billar (Mover SetupControllers al Final)..."); // Log actualizado
 
             scene = new THREE.Scene();
             camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 100);
-            // La posición de la cámara se define dentro del playerGroup
 
             renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
             renderer.setSize(window.innerWidth, window.innerHeight);
@@ -186,33 +184,43 @@
 
             // --- Player Rig ---
             playerGroup = new THREE.Group();
-            playerGroup.position.set(0, 1.6, tableSurfaceY + 1.0); // Posición inicial del jugador
+            playerGroup.position.set(0, 1.6, tableSurfaceY + 1.0);
             scene.add(playerGroup);
             playerGroup.add(camera); // Añadir cámara al rig
             console.log("Player group creado y añadido a la escena.");
 
             // --- Crear Grupo de la Mesa ---
             tableGroup = new THREE.Group();
-            tableGroup.position.set(0, tableSurfaceY, -1.5); // Posición de la mesa en el mundo
+            tableGroup.position.set(0, tableSurfaceY, -1.5);
             scene.add(tableGroup);
+            console.log("Table group creado.");
 
             // --- Crear Visuales de la Mesa ---
+            console.log(">>> Llamando a createTableSurfaceVisualOnly...");
             createTableSurfaceVisualOnly(tableGroup);
+            console.log("<<< createTableSurfaceVisualOnly completado.");
+            console.log(">>> Llamando a createCushionsAndFrameVisualsOnly...");
             createCushionsAndFrameVisualsOnly(tableGroup);
+            console.log("<<< createCushionsAndFrameVisualsOnly completado.");
 
             // --- Crear LAS TRES BOLAS (Visual + Propiedad Velocity) ---
+            console.log(">>> Llamando a createBallsManualPhysics...");
             createBallsManualPhysics(tableGroup);
+            console.log("<<< createBallsManualPhysics completado.");
 
-            // --- Configurar Mandos (Visual y asignación de roles) ---
-            setupControllers(); // Ahora también asigna move/rotate controllers
-
-            // --- Crear Slider 3D --- (Se hace dentro de setupControllers)
-
-            // Configurar Sonido
+            // --- Configurar Sonido ---
+            console.log(">>> Llamando a setupSound...");
             setupSound();
+            console.log("<<< setupSound completado.");
 
             // --- Event Listeners ---
             window.addEventListener('resize', onWindowResize, false);
+
+            // ***** CAMBIO DE ORDEN: Configurar Mandos AL FINAL *****
+            console.log(">>> Llamando a setupControllers (al final)...");
+            setupControllers();
+            console.log("<<< setupControllers completado (al final).");
+            // ******************************************************
 
             // --- Start Animation Loop ---
             renderer.setAnimationLoop(animate);
@@ -221,6 +229,7 @@
 
         // --- Función para crear solo la superficie visual ---
         function createTableSurfaceVisualOnly(group) {
+             console.log("  [createTableSurfaceVisualOnly] Creando tapete...");
              const tableGeometry = new THREE.BoxGeometry(tableWidth, tableThickness, tableHeight);
              const material = new THREE.MeshStandardMaterial({ color: 0x006400, roughness: 0.9 });
              const mesh = new THREE.Mesh(tableGeometry, material);
@@ -228,10 +237,12 @@
              mesh.position.y = -tableThickness / 2; // Local
              mesh.receiveShadow = true;
              group.add(mesh);
+             console.log("    > Tapete añadido a group.");
          }
 
         // --- Función para crear cojines y marco (SOLO VISUAL) ---
         function createCushionsAndFrameVisualsOnly(group) {
+            console.log("  [createCushionsAndFrameVisualsOnly] Creando visuales...");
             const cushionYPos = cushionHeight / 2;
             const woodMaterial = new THREE.MeshStandardMaterial({ color: 0x8B4513, roughness: 0.7 });
             const cushionGeometryLong = new THREE.BoxGeometry(tableWidth + 2 * cushionWidth, cushionHeight, cushionWidth);
@@ -250,6 +261,7 @@
                      cushionMesh.castShadow = true;
                      cushionMesh.receiveShadow = true;
                      group.add(cushionMesh);
+                     // console.log(`      > Cojín visual ${index+1} añadido.`);
                  } catch(e) { console.error(`***** ERROR creando/añadiendo cojín visual ${index+1}:`, e); }
             });
             try {
@@ -260,13 +272,15 @@
                  baseMesh.castShadow = true;
                  baseMesh.receiveShadow = true;
                  group.add(baseMesh);
+                 // console.log("      > Base visual añadida.");
             } catch(e) { console.error("***** ERROR creando/añadiendo base visual:", e); }
+             console.log("  [createCushionsAndFrameVisualsOnly] completado.");
         }
 
 
         // --- Función para crear LAS TRES bolas (Visual + Velocity) ---
         function createBallsManualPhysics(targetGroup) {
-             // console.log("Creando las 3 mallas visuales de las bolas (con velocity)...");
+             console.log("  [createBallsManualPhysics] Creando las 3 mallas...");
              const sphereGeometry = new THREE.SphereGeometry(ballRadius, 32, 32);
              const ballYPos = ballRadius;
 
@@ -286,22 +300,22 @@
                      mesh.castShadow = true;
                      targetGroup.add(mesh);
 
-                     // Añadir objeto al array con malla y velocidad inicial CERO
                      const ballInfo = {
                          mesh: mesh,
-                         velocity: new THREE.Vector3(0, 0, 0), // Importante para que exista la propiedad
+                         velocity: new THREE.Vector3(0, 0, 0),
                          name: data.name
                      };
                      balls.push(ballInfo);
                      if (data.name === 'white') { cueBall = ballInfo; }
+                     // console.log(`      > Malla de bola ${data.name} añadida.`);
                  } catch(e) { console.error(`***** ERROR creando/añadiendo malla de bola ${data.name}:`, e); }
              });
-              // console.log("Mallas visuales de bolas creadas.");
+              console.log("  [createBallsManualPhysics] completado.");
         }
 
         // --- Setup Controllers (Asignar roles y añadir a playerGroup) ---
         function setupControllers() {
-             console.log("Configurando mandos...");
+             console.log("  [setupControllers] Configurando mandos...");
              // Controller 1 (Izquierda - Movimiento)
              controller1 = renderer.xr.getController(0);
              if (controller1) {
@@ -313,7 +327,7 @@
                   const lineGeometry = new THREE.BufferGeometry().setFromPoints([ new THREE.Vector3(0, 0, 0), new THREE.Vector3(0, 0, -0.2) ]);
                   const line1 = new THREE.Line(lineGeometry, lineMaterial);
                   controller1.add(line1);
-                  console.log("Mando 1 (Izquierda/Movimiento) configurado.");
+                  // console.log("    Mando 1 (Izquierda/Movimiento) configurado.");
              } else { console.error("¡No se pudo obtener el Controller 1!"); }
 
              // Controller 2 (Derecha - Disparo y Rotación)
@@ -363,21 +377,24 @@
                   sliderGroup3D.position.set(0, 0.05, -0.2);
                   sliderGroup3D.rotation.set(-Math.PI / 6, 0, 0);
                   controller2.add(sliderGroup3D);
-                  console.log("Mando 2 (Derecha/Disparo/Rotación) configurado.");
+                  // console.log("    Mando 2 (Derecha/Disparo/Rotación) configurado.");
              } else { console.error("¡No se pudo obtener el Controller 2!"); }
-             console.log("Mandos configurados.");
+             console.log("  [setupControllers] completado.");
          }
 
         // --- Función para crear el Slider Dinámico (HTML) - Eliminada ---
 
         // --- Función para configurar Sonido ---
         function setupSound() {
+             console.log("  [setupSound] Configurando sonido...");
             if (typeof Tone === 'undefined') { console.warn("Tone.js no está cargado."); return; }
             try {
                 const noiseFilter = new Tone.Filter({type : 'bandpass', frequency : 1800, Q : 1.5}).toDestination();
                 ballHitSynth = new Tone.NoiseSynth({ noise: { type: 'white' }, envelope: { attack: 0.001, decay: 0.08, sustain: 0 }, volume: -8 }).connect(noiseFilter);
                 cushionHitSynth = new Tone.MembraneSynth({ pitchDecay: 0.06, octaves: 3, envelope: { attack: 0.001, decay: 0.25, sustain: 0.01, release: 0.1 }, volume: -6 }).toDestination();
-            } catch (e) { console.error("Error creando sintetizadores Tone.js:", e); }
+                console.log("    > Sintetizadores Tone.js creados.");
+            } catch (e) { console.error("***** ERROR creando sintetizadores Tone.js:", e); }
+             console.log("  [setupSound] completado.");
         }
 
         // --- WebXR Event Handlers (Manejar aiming y disparo + Activar Audio) ---
@@ -467,46 +484,31 @@
 
             // --- Movimiento (Mando Izquierdo - controller1) ---
             if (moveController) {
-                if (moveController.gamepad && moveController.gamepad.axes?.length >= 4) { // Comprobar gamepad y longitud de axes
+                if (moveController.gamepad && moveController.gamepad.axes?.length >= 4) {
                     const axes = moveController.gamepad.axes;
-                    // ***** Loguear SIEMPRE los ejes del mando izquierdo *****
-                    console.log(`DEBUG Mando Izq (Move): Axes = [${axes[0]?.toFixed(2)}, ${axes[1]?.toFixed(2)}, ${axes[2]?.toFixed(2)}, ${axes[3]?.toFixed(2)}]`);
-                    // *******************************************************
+                    // Loguear SIEMPRE los ejes del mando izquierdo
+                    // console.log(`DEBUG Mando Izq (Move): Axes = [${axes.map(a => a?.toFixed(2) ?? 'N/A').join(', ')}]`);
 
-                    // Leer ejes (asumiendo 2=X, 3=Y) - AJUSTAR SEGÚN LOGS
                     const joystickX = axes[2] || 0;
                     const joystickY = axes[3] || 0; // Negativo es hacia adelante
-
-                    // Aplicar zona muerta para el movimiento real
-                    if (Math.abs(joystickX) > deadzone) {
-                        dx = -joystickX;
-                    }
-                    if (Math.abs(joystickY) > deadzone) {
-                        dz = joystickY;
-                    }
+                    if (Math.abs(joystickX) > deadzone) dx = -joystickX;
+                    if (Math.abs(joystickY) > deadzone) dz = joystickY;
                 } else {
-                     // ***** Log si el gamepad no está disponible o no tiene ejes suficientes *****
-                     // console.log(`DEBUG Mando Izq (Move): Gamepad ${moveController.gamepad ? 'existe pero sin suficientes ejes' : 'no disponible'}.`);
+                    // console.log("DEBUG Mando Izq (Move): Gamepad no disponible o sin ejes suficientes.");
                 }
             }
 
             // --- Rotación (Mando Derecho - controller2) ---
              if (rotateController) {
-                 if (rotateController.gamepad && rotateController.gamepad.axes?.length >= 3) { // Comprobar gamepad y longitud de axes
+                 if (rotateController.gamepad && rotateController.gamepad.axes?.length >= 3) {
                      const axes = rotateController.gamepad.axes;
-                     // ***** Loguear SIEMPRE los ejes del mando derecho *****
-                     console.log(`DEBUG Mando Der (Rotate): Axes = [${axes[0]?.toFixed(2)}, ${axes[1]?.toFixed(2)}, ${axes[2]?.toFixed(2)}, ${axes[3]?.toFixed(2) ?? 'N/A'}]`);
-                     // *******************************************************
+                     // Loguear SIEMPRE los ejes del mando derecho
+                     // console.log(`DEBUG Mando Der (Rotate): Axes = [${axes.map(a => a?.toFixed(2) ?? 'N/A').join(', ')}]`);
 
-                     // Usar eje X (índice 2) del joystick derecho para rotar - AJUSTAR SEGÚN LOGS
                      const joystickX = axes[2] || 0;
-                     // Aplicar zona muerta para la rotación real
-                     if (Math.abs(joystickX) > deadzone + 0.05) { // Umbral un poco mayor para rotación
-                         ry = -joystickX;
-                     }
+                     if (Math.abs(joystickX) > deadzone + 0.05) ry = -joystickX;
                  } else {
-                      // ***** Log si el gamepad no está disponible o no tiene ejes suficientes *****
-                      // console.log(`DEBUG Mando Der (Rotate): Gamepad ${rotateController.gamepad ? 'existe pero sin suficientes ejes' : 'no disponible'}.`);
+                      // console.log("DEBUG Mando Der (Rotate): Gamepad no disponible o sin ejes suficientes.");
                  }
              }
 
@@ -514,19 +516,18 @@
             if (playerGroup && (dx !== 0 || dz !== 0 || ry !== 0)) {
                 // Rotación
                 if (ry !== 0) {
-                    playerGroup.rotation.y += ry * rotateSpeed * delta; // Usar delta (timeStep)
+                    playerGroup.rotation.y += ry * rotateSpeed * delta;
                 }
-
                 // Movimiento
                 if (dx !== 0 || dz !== 0) {
-                    playerGroup.getWorldDirection(worldDirection); // Z negativo local del grupo
+                    playerGroup.getWorldDirection(worldDirection);
                     worldDirection.y = 0;
                     worldDirection.normalize();
-                    rightDirection.crossVectors(playerGroup.up, worldDirection).normalize(); // X positivo local del grupo
+                    rightDirection.crossVectors(playerGroup.up, worldDirection).normalize();
                     playerDirection.set(0, 0, 0);
                     playerDirection.add(worldDirection.multiplyScalar(dz));
                     playerDirection.add(rightDirection.multiplyScalar(dx));
-                    const moveDistance = moveSpeed * delta; // Usar delta (timeStep)
+                    const moveDistance = moveSpeed * delta;
                     const moveVector = playerDirection.multiplyScalar(moveDistance);
                     playerGroup.position.add(moveVector);
                 }
@@ -672,3 +673,4 @@
     </script>
 </body>
 </html>
+
