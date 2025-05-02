@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
     <meta charset="utf-8">
-    <title>WebXR Billar - Física Manual + Línea Mira Siempre</title> <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>WebXR Billar - Mover SetupControllers al Final v2</title> <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
     <style>
         body { margin: 0; overflow: hidden; font-family: monospace; background-color: #000; }
         canvas { display: block; }
@@ -53,14 +53,23 @@
 
         // --- Global Variables ---
         let camera, scene, renderer;
-        let tableGroup; // Contenedor
+        let tableGroup; // Contenedor de la mesa
         const balls = []; // Array para { mesh, velocity, name }
         let cueBall; // Referencia a la bola blanca
 
+        // Player Rig y Controles
+        let playerGroup;
+        const playerDirection = new THREE.Vector3();
+        const moveSpeed = 1.5;
+        const rotateSpeed = 1.5;
+        // const clock = new THREE.Clock(); // Eliminado
+
         // WebXR Controller Variables
-        let controller1, controller2;
-        let cueController = null;
-        let cueStickMesh;
+        let controller1, controller2; // Mandos (0=izq, 1=der)
+        let cueController = null; // Mando para disparar (controller2)
+        let moveController = null; // Mando para moverse (controller1)
+        let rotateController = null; // Mando para girar (controller2)
+        let cueStickMesh; // Visual del taco
         let aimLine;
         let isTriggerDown = false;
 
@@ -115,7 +124,7 @@
         const MIN_Z = -tableHeight / 2 + ballRadius;
         const MAX_Z = tableHeight / 2 - ballRadius;
 
-        // Paso de tiempo fijo para física manual
+        // Paso de tiempo fijo para física manual y movimiento
         const timeStep = 1 / 90;
 
         // Variables temporales para cálculos
@@ -133,17 +142,18 @@
         const vel2tVec = new THREE.Vector3();
         const impulseVec = new THREE.Vector3();
         const correction = new THREE.Vector3();
+        const worldDirection = new THREE.Vector3(); // Para movimiento
+        const rightDirection = new THREE.Vector3(); // Para movimiento
 
 
         init();
 
         // --- Initialization ---
         function init() {
-            console.log("Iniciando escena WebXR Billar (Física Manual + Slider 3D + Línea Mira Siempre)...");
+            console.log("Iniciando escena WebXR Billar (Mover SetupControllers al Final v2)..."); // Log actualizado
 
             scene = new THREE.Scene();
             camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 100);
-            camera.position.set(0, tableSurfaceY + 1.5, 1);
 
             renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
             renderer.setSize(window.innerWidth, window.innerHeight);
@@ -171,38 +181,55 @@
             spotLight.shadow.camera.fov = 50;
             spotLight.shadow.bias = -0.0005;
             scene.add(spotLight);
-            scene.add(camera);
+
+            // --- Player Rig ---
+            playerGroup = new THREE.Group();
+            playerGroup.position.set(0, 1.6, tableSurfaceY + 1.0);
+            scene.add(playerGroup);
+            playerGroup.add(camera); // Añadir cámara al rig
+            console.log("Player group creado y añadido a la escena.");
 
             // --- Crear Grupo de la Mesa ---
             tableGroup = new THREE.Group();
             tableGroup.position.set(0, tableSurfaceY, -1.5);
             scene.add(tableGroup);
+            console.log("Table group creado.");
 
             // --- Crear Visuales de la Mesa ---
+            console.log(">>> Llamando a createTableSurfaceVisualOnly...");
             createTableSurfaceVisualOnly(tableGroup);
+            console.log("<<< createTableSurfaceVisualOnly completado.");
+            console.log(">>> Llamando a createCushionsAndFrameVisualsOnly...");
             createCushionsAndFrameVisualsOnly(tableGroup);
+            console.log("<<< createCushionsAndFrameVisualsOnly completado.");
 
             // --- Crear LAS TRES BOLAS (Visual + Propiedad Velocity) ---
+            console.log(">>> Llamando a createBallsManualPhysics...");
             createBallsManualPhysics(tableGroup);
+            console.log("<<< createBallsManualPhysics completado.");
 
-            // --- Configurar Mandos (Visual) ---
-            setupControllers(); // Ahora crea la línea de mira y el slider 3D
-
-            // --- Crear Slider 3D --- (Se hace dentro de setupControllers)
-
-            // Configurar Sonido
+            // --- Configurar Sonido ---
+            console.log(">>> Llamando a setupSound...");
             setupSound();
+            console.log("<<< setupSound completado.");
 
             // --- Event Listeners ---
             window.addEventListener('resize', onWindowResize, false);
 
+            // ***** CAMBIO DE ORDEN: Configurar Mandos AL FINAL *****
+            console.log(">>> Llamando a setupControllers (al final)...");
+            setupControllers(); // Ahora también asigna move/rotate controllers
+            console.log("<<< setupControllers completado (al final).");
+            // ******************************************************
+
             // --- Start Animation Loop ---
             renderer.setAnimationLoop(animate);
-            console.log("Inicialización completa (Física Manual + Slider 3D + Línea Mira Siempre).");
+            console.log("Inicialización completa.");
         }
 
         // --- Función para crear solo la superficie visual ---
         function createTableSurfaceVisualOnly(group) {
+             console.log("  [createTableSurfaceVisualOnly] Creando tapete...");
              const tableGeometry = new THREE.BoxGeometry(tableWidth, tableThickness, tableHeight);
              const material = new THREE.MeshStandardMaterial({ color: 0x006400, roughness: 0.9 });
              const mesh = new THREE.Mesh(tableGeometry, material);
@@ -210,10 +237,12 @@
              mesh.position.y = -tableThickness / 2; // Local
              mesh.receiveShadow = true;
              group.add(mesh);
+             console.log("    > Tapete añadido a group.");
          }
 
         // --- Función para crear cojines y marco (SOLO VISUAL) ---
         function createCushionsAndFrameVisualsOnly(group) {
+            console.log("  [createCushionsAndFrameVisualsOnly] Creando visuales...");
             const cushionYPos = cushionHeight / 2;
             const woodMaterial = new THREE.MeshStandardMaterial({ color: 0x8B4513, roughness: 0.7 });
             const cushionGeometryLong = new THREE.BoxGeometry(tableWidth + 2 * cushionWidth, cushionHeight, cushionWidth);
@@ -232,6 +261,7 @@
                      cushionMesh.castShadow = true;
                      cushionMesh.receiveShadow = true;
                      group.add(cushionMesh);
+                     // console.log(`      > Cojín visual ${index+1} añadido.`);
                  } catch(e) { console.error(`***** ERROR creando/añadiendo cojín visual ${index+1}:`, e); }
             });
             try {
@@ -242,13 +272,15 @@
                  baseMesh.castShadow = true;
                  baseMesh.receiveShadow = true;
                  group.add(baseMesh);
+                 // console.log("      > Base visual añadida.");
             } catch(e) { console.error("***** ERROR creando/añadiendo base visual:", e); }
+             console.log("  [createCushionsAndFrameVisualsOnly] completado.");
         }
 
 
         // --- Función para crear LAS TRES bolas (Visual + Velocity) ---
         function createBallsManualPhysics(targetGroup) {
-             // console.log("Creando las 3 mallas visuales de las bolas (con velocity)...");
+             console.log("  [createBallsManualPhysics] Creando las 3 mallas...");
              const sphereGeometry = new THREE.SphereGeometry(ballRadius, 32, 32);
              const ballYPos = ballRadius;
 
@@ -268,40 +300,44 @@
                      mesh.castShadow = true;
                      targetGroup.add(mesh);
 
-                     // Añadir objeto al array con malla y velocidad inicial CERO
                      const ballInfo = {
                          mesh: mesh,
-                         velocity: new THREE.Vector3(0, 0, 0), // Importante para que exista la propiedad
+                         velocity: new THREE.Vector3(0, 0, 0),
                          name: data.name
                      };
                      balls.push(ballInfo);
                      if (data.name === 'white') { cueBall = ballInfo; }
+                     // console.log(`      > Malla de bola ${data.name} añadida.`);
                  } catch(e) { console.error(`***** ERROR creando/añadiendo malla de bola ${data.name}:`, e); }
              });
-              // console.log("Mallas visuales de bolas creadas.");
+              console.log("  [createBallsManualPhysics] completado.");
         }
 
-        // --- Setup Controllers (INTERCAMBIADO + Línea de Mira + Slider 3D) ---
+        // --- Setup Controllers (Asignar roles y añadir a playerGroup) ---
         function setupControllers() {
-             // console.log("Configurando mandos (Taco en Controller 2)...");
-             controller1 = renderer.xr.getController(0); // Izquierda
+             console.log("  [setupControllers] Configurando mandos...");
+             // Controller 1 (Izquierda - Movimiento)
+             controller1 = renderer.xr.getController(0);
              if (controller1) {
-                 controller1.addEventListener('selectstart', onSelectStart);
-                 controller1.addEventListener('selectend', onSelectEnd);
-                 scene.add(controller1);
-                 const lineMaterial = new THREE.LineBasicMaterial({ color: 0xcccccc });
-                 const lineGeometry = new THREE.BufferGeometry().setFromPoints([ new THREE.Vector3(0, 0, 0), new THREE.Vector3(0, 0, -0.2) ]);
-                 const line1 = new THREE.Line(lineGeometry, lineMaterial);
-                 controller1.add(line1);
+                  controller1.addEventListener('selectstart', onSelectStart);
+                  controller1.addEventListener('selectend', onSelectEnd);
+                  playerGroup.add(controller1); // Añadir al playerGroup
+                  moveController = controller1;
+                  const lineMaterial = new THREE.LineBasicMaterial({ color: 0xcccccc });
+                  const lineGeometry = new THREE.BufferGeometry().setFromPoints([ new THREE.Vector3(0, 0, 0), new THREE.Vector3(0, 0, -0.2) ]);
+                  const line1 = new THREE.Line(lineGeometry, lineMaterial);
+                  controller1.add(line1);
+                  // console.log("    Mando 1 (Izquierda/Movimiento) configurado.");
              } else { console.error("¡No se pudo obtener el Controller 1!"); }
 
-             controller2 = renderer.xr.getController(1); // Derecha
+             // Controller 2 (Derecha - Disparo y Rotación)
+             controller2 = renderer.xr.getController(1);
              if (controller2) {
                   controller2.addEventListener('selectstart', onSelectStart);
                   controller2.addEventListener('selectend', onSelectEnd);
-                  scene.add(controller2);
+                  playerGroup.add(controller2); // Añadir al playerGroup
                   cueController = controller2;
-
+                  rotateController = controller2;
                   // Taco
                   const cueLength = 1.2;
                   const cueRadius = 0.01;
@@ -312,15 +348,13 @@
                   cueStickMesh.rotation.set(Math.PI / 2, 0, 0);
                   cueStickMesh.castShadow = true;
                   controller2.add(cueStickMesh);
-
                   // Línea de Mira
-                  const aimLineMaterial = new THREE.LineBasicMaterial({ color: 0xff00ff }); // Magenta
+                  const aimLineMaterial = new THREE.LineBasicMaterial({ color: 0xff00ff });
                   const points = [new THREE.Vector3(0, 0, 0), new THREE.Vector3(0, 0, -1)];
                   const aimLineGeometry = new THREE.BufferGeometry().setFromPoints(points);
                   aimLine = new THREE.Line(aimLineGeometry, aimLineMaterial);
-                  aimLine.visible = false; // Empezar invisible
+                  aimLine.visible = false;
                   controller2.add(aimLine);
-
                   // Slider 3D
                   sliderGroup3D = new THREE.Group();
                   sliderGroup3D.visible = false;
@@ -343,22 +377,24 @@
                   sliderGroup3D.position.set(0, 0.05, -0.2);
                   sliderGroup3D.rotation.set(-Math.PI / 6, 0, 0);
                   controller2.add(sliderGroup3D);
-                  // console.log("Slider 3D creado y añadido a Controller 2.");
-
+                  // console.log("    Mando 2 (Derecha/Disparo/Rotación) configurado.");
              } else { console.error("¡No se pudo obtener el Controller 2!"); }
-             // console.log("Mandos configurados.");
+             console.log("  [setupControllers] completado.");
          }
 
         // --- Función para crear el Slider Dinámico (HTML) - Eliminada ---
 
         // --- Función para configurar Sonido ---
         function setupSound() {
+             console.log("  [setupSound] Configurando sonido...");
             if (typeof Tone === 'undefined') { console.warn("Tone.js no está cargado."); return; }
             try {
                 const noiseFilter = new Tone.Filter({type : 'bandpass', frequency : 1800, Q : 1.5}).toDestination();
                 ballHitSynth = new Tone.NoiseSynth({ noise: { type: 'white' }, envelope: { attack: 0.001, decay: 0.08, sustain: 0 }, volume: -8 }).connect(noiseFilter);
                 cushionHitSynth = new Tone.MembraneSynth({ pitchDecay: 0.06, octaves: 3, envelope: { attack: 0.001, decay: 0.25, sustain: 0.01, release: 0.1 }, volume: -6 }).toDestination();
-            } catch (e) { console.error("Error creando sintetizadores Tone.js:", e); }
+                // console.log("    > Sintetizadores Tone.js creados.");
+            } catch (e) { console.error("***** ERROR creando sintetizadores Tone.js:", e); }
+             console.log("  [setupSound] completado.");
         }
 
         // --- WebXR Event Handlers (Manejar aiming y disparo + Activar Audio) ---
@@ -368,9 +404,7 @@
                  isTriggerDown = true;
                  isAiming = true;
                  if (sliderGroup3D) sliderGroup3D.visible = true;
-                 // ***** CAMBIO: No ocultar línea de mira *****
-                 // if (aimLine) aimLine.visible = false;
-                 // *****************************************
+                 if (aimLine) aimLine.visible = false;
                  if (!audioInitialized && typeof Tone !== 'undefined' && Tone.context.state !== 'running') {
                      console.log("Intentando iniciar Audio Context...");
                      Tone.start().then(() => { audioInitialized = true; console.log("Audio Context iniciado."); }).catch(e => console.error("Error al iniciar Tone.js:", e));
@@ -384,8 +418,6 @@
                  if (isAiming) {
                      isAiming = false;
                      if (sliderGroup3D) sliderGroup3D.visible = false;
-                     // ***** CAMBIO: Asegurar que la línea de mira se muestre (se hará en animate) *****
-                     // if (aimLine) aimLine.visible = true; // Se controla en animate
                      shootBallManual(currentSliderValue);
                  }
              }
@@ -441,18 +473,44 @@
             } catch (e) { console.error("Error al disparar sonido Tone.js:", e); }
         }
 
-        // --- Función para manejar Input de Mandos (VACÍA POR AHORA) ---
-        function handleControllerInput(delta) {
-            // Lógica de movimiento desactivada
+        // --- Función para manejar Input de Mandos (SOLO ROTACIÓN JUGADOR) ---
+        function handleControllerInput(delta) { // delta es timeStep fijo
+            let ry = 0; // Rotación Y
+            const deadzone = 0.1;
+
+            // --- Rotación (Mando Derecho - controller2) ---
+             if (rotateController) {
+                 if (rotateController.gamepad && rotateController.gamepad.axes?.length >= 3) {
+                     const axes = rotateController.gamepad.axes;
+                     // Loguear SIEMPRE los ejes del mando derecho para depurar
+                     // console.log(`DEBUG Mando Der (Rotate): Axes = [${axes.map(a => a?.toFixed(2) ?? 'N/A').join(', ')}]`);
+
+                     // Usar eje X (índice 2) del joystick derecho para rotar - AJUSTAR SI ES NECESARIO
+                     const joystickX = axes[2] || 0;
+                     // Aplicar zona muerta para la rotación real
+                     if (Math.abs(joystickX) > deadzone + 0.05) {
+                         ry = -joystickX; // Invertido para que derecha rote a la derecha (sentido horario)
+                     }
+                 } else {
+                      // console.log("DEBUG Mando Der (Rotate): Gamepad no disponible o sin ejes suficientes.");
+                 }
+             }
+
+            // --- Aplicar Rotación al Player Rig ---
+            if (playerGroup && ry !== 0) {
+                playerGroup.rotation.y += ry * rotateSpeed * delta; // Usar delta (timeStep)
+            }
         }
 
 
-        // --- Animation Loop (FÍSICA MANUAL + SLIDER + SONIDO + COLISIÓN MEJORADA) ---
+        // --- Animation Loop (FÍSICA MANUAL + SLIDER + SONIDO + COLISIÓN MEJORADA + ROTACIÓN JUGADOR) ---
         function animate() {
             const elapsedTime = performance.now() / 1000; // Tiempo para oscilación
 
-            // --- Manejar Input de Mandos (VACÍO) ---
-            // if (renderer.xr.isPresenting) { handleControllerInput(timeStep); }
+            // --- Manejar Input de Mandos (SOLO ROTACIÓN) ---
+            if (renderer.xr.isPresenting) {
+                 try { handleControllerInput(timeStep); } catch (e) { console.error("Error en handleControllerInput:", e); } // Pasar timeStep fijo
+            }
 
             // Actualizar Slider 3D si estamos apuntando
             if (isAiming && sliderGroup3D && sliderHandle) {
@@ -475,9 +533,7 @@
                      positions.setXYZ(1, farPointLocal.x, farPointLocal.y, farPointLocal.z);
                      positions.needsUpdate = true;
                      aimLine.geometry.computeBoundingSphere();
-                     // ***** CAMBIO: Mostrar siempre la línea si el mando está presente *****
-                     aimLine.visible = true;
-                     // aimLine.visible = !isAiming; // Comentado
+                     aimLine.visible = !isAiming;
                  } catch (e) { if(aimLine) aimLine.visible = false; }
              } else if (aimLine) {
                  aimLine.visible = false;
