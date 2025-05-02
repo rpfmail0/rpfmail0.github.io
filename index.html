@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
     <meta charset="utf-8">
-    <title>WebXR Billar - Física Manual + Rotación Jugador v4</title> <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>WebXR Billar - Física Manual + Rotación Jugador v5</title> <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
     <style>
         body { margin: 0; overflow: hidden; font-family: monospace; background-color: #000; }
         canvas { display: block; }
@@ -58,17 +58,18 @@
         const balls = []; // Array para { mesh, velocity, name }
         let cueBall; // Referencia a la bola blanca
 
-        // Player Rig y Controles
-        let playerGroup;
-        const playerDirection = new THREE.Vector3();
-        const moveSpeed = 1.5;
-        const rotateSpeed = 1.5;
+        // ***** Player Rig y Controles *****
+        let playerGroup; // Grupo que representa al jugador (cámara + mandos)
+        const playerDirection = new THREE.Vector3(); // Dirección de movimiento calculada
+        const moveSpeed = 1.5; // Velocidad de movimiento (metros/segundo)
+        const rotateSpeed = 1.5; // Velocidad de rotación (radianes/segundo)
         // const clock = new THREE.Clock(); // Eliminado
+        // ***************************************
 
         // WebXR Controller Variables
         let controller1, controller2; // Mandos (0=izq, 1=der)
         let cueController = null; // Mando para disparar (controller2)
-        let moveController = null; // Mando para moverse (controller1)
+        let moveController = null; // Mando para moverse (controller1) - No usado ahora
         let rotateController = null; // Mando para girar (controller2)
         let cueStickMesh; // Visual del taco
         let aimLine;
@@ -216,7 +217,7 @@
 
             // --- Configurar Mandos (Visual y asignación de roles) ---
             console.log(">>> Llamando a setupControllers...");
-            setupControllers(); // Mover al final puede ayudar con gamepad
+            setupControllers(); // Añade mandos al playerGroup
             console.log("<<< setupControllers completado.");
 
             // --- Crear Slider 3D --- (Se hace dentro de setupControllers)
@@ -327,7 +328,7 @@
                   controller1.addEventListener('selectstart', onSelectStart);
                   controller1.addEventListener('selectend', onSelectEnd);
                   playerGroup.add(controller1); // Añadir al playerGroup
-                  moveController = controller1;
+                  moveController = controller1; // Asignar rol de movimiento
                   const controllerGrip1 = renderer.xr.getControllerGrip(0);
                   if (controllerGrip1) {
                       controllerGrip1.add(controllerModelFactory.createControllerModel(controllerGrip1));
@@ -342,8 +343,8 @@
                   controller2.addEventListener('selectstart', onSelectStart);
                   controller2.addEventListener('selectend', onSelectEnd);
                   playerGroup.add(controller2); // Añadir al playerGroup
-                  cueController = controller2;
-                  rotateController = controller2;
+                  cueController = controller2; // Asignar rol de disparo
+                  rotateController = controller2; // Asignar rol de rotación
                   const controllerGrip2 = renderer.xr.getControllerGrip(1);
                    if (controllerGrip2) {
                       controllerGrip2.add(controllerModelFactory.createControllerModel(controllerGrip2));
