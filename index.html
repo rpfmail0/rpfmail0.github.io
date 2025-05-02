@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
     <meta charset="utf-8">
-    <title>WebXR Billar - Rotación Joystick en Animate v2</title> <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>WebXR Billar - Rotación en Animate v3</title> <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
     <style>
         body { margin: 0; overflow: hidden; font-family: monospace; background-color: #000; }
         canvas { display: block; }
@@ -12,7 +12,7 @@
             right: 20px;
             z-index: 999;
         }
-        /* Estilos para Slider 3D */
+        /* Estilos para Slider 3D (Mantenidos por si se reactiva) */
         .dynamic-slider-container {
             position: absolute;
             background-color: rgba(50, 50, 50, 0.8);
@@ -58,18 +58,14 @@
         const balls = []; // Array para { mesh, velocity, name }
         let cueBall; // Referencia a la bola blanca
 
-        // Player Rig y Controles
-        let playerGroup;
-        const playerDirection = new THREE.Vector3();
-        const moveSpeed = 1.5;
-        const rotateSpeed = 1.5;
-        // const clock = new THREE.Clock(); // Eliminado
+        // ***** Player Rig y Controles *****
+        let playerGroup; // Grupo que representa al jugador (cámara + mandos)
+        const rotateSpeed = 1.5; // Velocidad de rotación (radianes/segundo)
+        // ***************************************
 
         // WebXR Controller Variables
-        // let controller1, controller2; // No almacenar referencias globales para input
+        // let controller1, controller2; // No almacenar globales para input
         let cueController = null; // Aún necesario para saber cuál dispara
-        // let moveController = null;
-        // let rotateController = null;
         let cueStickMesh; // Visual del taco
         let aimLine;
         let isTriggerDown = false;
@@ -93,7 +89,7 @@
         let sliderBackground = null;
         let sliderHandle = null;
         let isAiming = false;
-        let currentSliderValue = 5.0;
+        let currentSliderValue = 5.0; // Valor slider (0-10)
         const maxSliderValue = 10.0;
         const minSliderValue = 0.0;
         const oscillationSpeed = 3.0;
@@ -143,15 +139,13 @@
         const vel2tVec = new THREE.Vector3();
         const impulseVec = new THREE.Vector3();
         const correction = new THREE.Vector3();
-        const worldDirection = new THREE.Vector3(); // Para movimiento
-        const rightDirection = new THREE.Vector3(); // Para movimiento
 
 
         init();
 
         // --- Initialization ---
         function init() {
-            console.log("Iniciando escena WebXR Billar (Rotación Joystick en Animate v2)..."); // Log actualizado
+            console.log("Iniciando escena WebXR Billar (Rotación en Animate v3)..."); // Log actualizado
 
             scene = new THREE.Scene();
             camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 100);
@@ -185,14 +179,14 @@
 
             // --- Player Rig ---
             playerGroup = new THREE.Group();
-            playerGroup.position.set(0, 1.6, tableSurfaceY + 1.0);
+            playerGroup.position.set(0, 1.6, tableSurfaceY + 1.0); // Posición inicial del jugador
             scene.add(playerGroup);
             playerGroup.add(camera); // Añadir cámara al rig
             console.log("Player group creado y añadido a la escena.");
 
             // --- Crear Grupo de la Mesa ---
             tableGroup = new THREE.Group();
-            tableGroup.position.set(0, tableSurfaceY, -1.5);
+            tableGroup.position.set(0, tableSurfaceY, -1.5); // Posición de la mesa en el mundo
             scene.add(tableGroup);
             console.log("Table group creado.");
 
@@ -312,7 +306,7 @@
         function onSelectStart(event) {
              const controller = event.target;
              // Log gamepad en evento
-             console.log(`DEBUG onSelectStart - Gamepad controller ${controller === renderer.xr.getController(0) ? '1' : '2'}:`, controller.gamepad);
+             // console.log(`DEBUG onSelectStart - Gamepad controller ${controller === renderer.xr.getController(0) ? '1' : '2'}:`, controller.gamepad);
              if (controller === cueController && !isStrokeInProgress) {
                  isTriggerDown = true;
                  isAiming = true;
@@ -345,7 +339,7 @@
         // --- Función para reproducir Sonido ---
         function playSound(synth, velocity, maxVelocity, type) { /* ... (igual que antes) ... */ }
 
-        // --- Función para manejar Input de Mandos (Leyendo directamente en animate) ---
+        // --- Función para manejar Input de Mandos (SOLO ROTACIÓN JUGADOR + LOGS DETALLADOS) ---
         function handleControllerInput(delta) { // delta es timeStep fijo
             let ry = 0; // Rotación Y
             const deadzone = 0.1;
@@ -358,11 +352,13 @@
 
             // --- Rotación (Mando Derecho - controller2) ---
              if (rotateController) {
+                 // Comprobar si el gamepad está listo y tiene ejes
                  if (rotateController.gamepad && Array.isArray(rotateController.gamepad.axes)) {
                      const axes = rotateController.gamepad.axes;
-                     // Loguear SIEMPRE los ejes
+                     // Loguear siempre los ejes si el gamepad está listo
                      console.log(`DEBUG Mando Der (Rotate): Gamepad OK. Axes = [${axes.map(a => a?.toFixed(2) ?? 'N/A').join(', ')}]`);
 
+                     // Intentar leer el eje 2 para rotación
                      if (axes.length >= 3) {
                          const joystickX = axes[2] || 0;
                          if (Math.abs(joystickX) > deadzone + 0.05) {
