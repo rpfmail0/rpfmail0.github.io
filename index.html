@@ -58,12 +58,19 @@
         const balls = []; // Array para { mesh, velocity, name }
         let cueBall; // Referencia a la bola blanca
 
-        // Player Rig y Controles
-        let playerGroup;
+        // ***** Player Rig y Controles *****
+        let playerGroup; // Grupo que representa al jugador (cámara + mandos)
+        // const playerDirection = new THREE.Vector3(); // No se usa para movimiento ahora
+        // const moveSpeed = 1.5; // No se usa para movimiento ahora
         const rotateSpeed = 1.5; // Velocidad de rotación (radianes/segundo)
+        // const clock = new THREE.Clock(); // Eliminado
+        // ***************************************
 
         // WebXR Controller Variables
-        let cueController = null; // Mando para disparar (controller2)
+        // let controller1, controller2; // No almacenar globales para input
+        let cueController = null; // Aún necesario para saber cuál dispara
+        // let moveController = null; // No se usa para movimiento ahora
+        // let rotateController = null; // No necesario almacenar globalmente
         let cueStickMesh; // Visual del taco
         let aimLine;
         let isTriggerDown = false;
@@ -137,6 +144,8 @@
         const vel2tVec = new THREE.Vector3();
         const impulseVec = new THREE.Vector3();
         const correction = new THREE.Vector3();
+        // const worldDirection = new THREE.Vector3(); // No necesario ahora
+        // const rightDirection = new THREE.Vector3(); // No necesario ahora
 
 
         init();
@@ -336,16 +345,16 @@
              if (rightHandInputSource) {
                  if (rightHandInputSource.gamepad && Array.isArray(rightHandInputSource.gamepad.axes)) {
                      const axes = rightHandInputSource.gamepad.axes;
-                     // Loguear solo si hay movimiento significativo
-                     if (axes.some(axis => Math.abs(axis) > 0.01)) {
-                        // console.log(`DEBUG Mando Der (InputSource): Gamepad OK. Axes = [${axes.map(a => a?.toFixed(2) ?? 'N/A').join(', ')}]`);
-                     }
+                     // Loguear solo si hay movimiento significativo (opcional, quitar si funciona)
+                     // if (axes.some(axis => Math.abs(axis) > 0.01)) {
+                     //    console.log(`DEBUG Mando Der (InputSource): Gamepad OK. Axes = [${axes.map(a => a?.toFixed(2) ?? 'N/A').join(', ')}]`);
+                     // }
 
-                     // Intentar leer el eje 2 para rotación
+                     // Leer el eje 2 para rotación
                      if (axes.length >= 3) {
                          const joystickX = axes[2] || 0;
                          if (Math.abs(joystickX) > deadzone + 0.05) {
-                             ry = -joystickX;
+                             ry = -joystickX; // Invertido para rotación natural
                          }
                      }
                  }
