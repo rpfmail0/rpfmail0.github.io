@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
     <meta charset="utf-8">
-    <title>WebXR Billar - Rotación en Animate v3</title> <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>WebXR Test - Rotación Joystick v5</title> <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
     <style>
         body { margin: 0; overflow: hidden; font-family: monospace; background-color: #000; }
         canvas { display: block; }
@@ -12,31 +12,8 @@
             right: 20px;
             z-index: 999;
         }
-        /* Estilos para Slider 3D (Mantenidos por si se reactiva) */
-        .dynamic-slider-container {
-            position: absolute;
-            background-color: rgba(50, 50, 50, 0.8);
-            padding: 15px;
-            border-radius: 10px;
-            color: white;
-            z-index: 101;
-            font-size: 1em;
-            text-align: center;
-            width: 280px;
-            border: 1px solid #888;
-            box-shadow: 0 2px 5px rgba(0,0,0,0.5);
-            display: none; /* Oculto por defecto */
-            pointer-events: none;
-        }
-        .dynamic-slider-container label { display: block; margin-bottom: 8px; font-weight: bold; }
-        .dynamic-slider-container .slider-value-pair { display: flex; align-items: center; justify-content: center; margin-top: 5px; }
-        .dynamic-slider-container input[type="range"] { width: 180px; height: 10px; cursor: default; margin: 0 10px 0 0; appearance: none; background: linear-gradient(to right, #0f0, #ff0, #f00); border-radius: 5px; outline: none; }
-        .dynamic-slider-container input[type="range"]::-webkit-slider-thumb { appearance: none; width: 16px; height: 16px; background: #fff; border-radius: 50%; cursor: default; }
-        .dynamic-slider-container input[type="range"]::-moz-range-thumb { width: 16px; height: 16px; background: #fff; border-radius: 50%; cursor: default; border: none; }
-        .dynamic-slider-container span { display: inline-block; min-width: 45px; text-align: right; font-weight: bold; font-size: 1.1em; background-color: rgba(0, 0, 0, 0.3); padding: 2px 5px; border-radius: 4px; color: #fff; }
     </style>
 
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.8.49/Tone.min.js"></script>
     <script type="importmap">
         {
             "imports": {
@@ -50,102 +27,23 @@
     <script type="module">
         import * as THREE from 'three';
         import { ARButton } from 'three/addons/webxr/ARButton.js';
+        // ***** CORRECCIÓN: Importar XRControllerModelFactory *****
         import { XRControllerModelFactory } from 'three/addons/webxr/XRControllerModelFactory.js';
+        // ****************************************************
 
         // --- Global Variables ---
         let camera, scene, renderer;
-        let tableGroup; // Contenedor de la mesa
-        const balls = []; // Array para { mesh, velocity, name }
-        let cueBall; // Referencia a la bola blanca
-
-        // ***** Player Rig y Controles *****
-        let playerGroup; // Grupo que representa al jugador (cámara + mandos)
-        const rotateSpeed = 1.5; // Velocidad de rotación (radianes/segundo)
-        // ***************************************
-
-        // WebXR Controller Variables
-        // let controller1, controller2; // No almacenar globales para input
-        let cueController = null; // Aún necesario para saber cuál dispara
-        let cueStickMesh; // Visual del taco
-        let aimLine;
-        let isTriggerDown = false;
-
-        // Gameplay State
-        let score = 0;
-        let isStrokeInProgress = false;
-        let hitYellowAfterStrokeStart = false;
-        let hitRedAfterStrokeStart = false;
-        let cushionHitsThisStroke = 0;
-
-        // Variables de Sonido
-        let ballHitSynth, cushionHitSynth;
-        let audioInitialized = false;
-        let lastBallHitTime = 0;
-        let lastCushionHitTime = 0;
-        const soundDebounce = 50;
-
-        // Variables para Slider 3D
-        let sliderGroup3D = null;
-        let sliderBackground = null;
-        let sliderHandle = null;
-        let isAiming = false;
-        let currentSliderValue = 5.0; // Valor slider (0-10)
-        const maxSliderValue = 10.0;
-        const minSliderValue = 0.0;
-        const oscillationSpeed = 3.0;
-        const sliderWidth = 0.4;
-        const sliderHeight = 0.05;
-        const handleSize = 0.03;
-        const minRealSpeed = 0.5;
-        const maxRealSpeed = 8.0;
-
-        // Constantes de Física Manual
-        const FRICTION = 0.988;
-        const MIN_VELOCITY_SQ = 0.0001;
-        const CUSHION_RESTITUTION = 0.6;
-        const BALL_RESTITUTION = 0.9;
-        const ENERGY_LOSS_FACTOR = Math.sqrt(0.95);
-
-        // Constantes de la mesa y bolas
-        const ballRadius = 0.03075;
-        const tableWidth = 1.42;
-        const tableHeight = 2.84;
-        const tableThickness = 0.01;
-        const cushionHeight = 0.05;
-        const cushionWidth = 0.05;
-        const tableSurfaceY = -0.4;
-
-        // Límites de la mesa para colisiones
-        const MIN_X = -tableWidth / 2 + ballRadius;
-        const MAX_X = tableWidth / 2 - ballRadius;
-        const MIN_Z = -tableHeight / 2 + ballRadius;
-        const MAX_Z = tableHeight / 2 - ballRadius;
-
-        // Paso de tiempo fijo para física manual y movimiento
-        const timeStep = 1 / 90;
-
-        // Variables temporales para cálculos
-        const tempVector = new THREE.Vector3();
-        const tipLocalOffset = new THREE.Vector3();
-        const aimDirectionLocal = new THREE.Vector3(0, 0, -1);
-        const farPointLocal = new THREE.Vector3();
-        const deltaPos = new THREE.Vector3();
-        const collisionNormal = new THREE.Vector3();
-        const collisionTangent = new THREE.Vector3();
-        const relativeVelocity = new THREE.Vector3();
-        const vel1nVec = new THREE.Vector3();
-        const vel1tVec = new THREE.Vector3();
-        const vel2nVec = new THREE.Vector3();
-        const vel2tVec = new THREE.Vector3();
-        const impulseVec = new THREE.Vector3();
-        const correction = new THREE.Vector3();
-
+        let cubeMesh; // El cubo azul
+        let playerGroup; // Grupo para cámara y mandos
+        // No necesitamos referencias globales a los mandos para este enfoque
+        const rotateSpeed = 1.5; // Velocidad de rotación
+        const timeStep = 1 / 90; // Paso de tiempo fijo
 
         init();
 
         // --- Initialization ---
         function init() {
-            console.log("Iniciando escena WebXR Billar (Rotación en Animate v3)..."); // Log actualizado
+            console.log("Iniciando Test Rotación Joystick v5 (Input Sources)..."); // Log actualizado
 
             scene = new THREE.Scene();
             camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 100);
@@ -155,55 +53,34 @@
             renderer.setPixelRatio(window.devicePixelRatio);
             renderer.setClearAlpha(0);
             renderer.xr.enabled = true;
-            renderer.shadowMap.enabled = true;
-            renderer.shadowMap.type = THREE.PCFSoftShadowMap;
             document.body.appendChild(renderer.domElement);
 
             const arButton = ARButton.createButton(renderer);
             document.body.appendChild(arButton);
 
-            // Iluminación Mejorada
-            const hemiLight = new THREE.HemisphereLight( 0xffffff, 0x888888, 1.2 );
-            hemiLight.position.set( 0, 5, 0 );
-            scene.add( hemiLight );
-            const spotLight = new THREE.SpotLight(0xffffff, 2.5, 10, Math.PI / 4, 0.3, 1.8);
-            spotLight.position.set(0.5, tableSurfaceY + 3, -1);
-            spotLight.castShadow = true;
-            spotLight.shadow.mapSize.width = 2048;
-            spotLight.shadow.mapSize.height = 2048;
-            spotLight.shadow.camera.near = 1.5;
-            spotLight.shadow.camera.far = 6;
-            spotLight.shadow.camera.fov = 50;
-            spotLight.shadow.bias = -0.0005;
-            scene.add(spotLight);
+            // Iluminación simple
+            scene.add(new THREE.AmbientLight(0xAAAAAA));
+            const dirLight = new THREE.DirectionalLight(0xffffff, 1.5);
+            dirLight.position.set(1, 2, 0.5);
+            scene.add(dirLight);
 
             // --- Player Rig ---
             playerGroup = new THREE.Group();
-            playerGroup.position.set(0, 1.6, tableSurfaceY + 1.0); // Posición inicial del jugador
+            playerGroup.position.set(0, 1.6, 0);
             scene.add(playerGroup);
-            playerGroup.add(camera); // Añadir cámara al rig
-            console.log("Player group creado y añadido a la escena.");
+            playerGroup.add(camera);
+            console.log("Player group creado.");
 
-            // --- Crear Grupo de la Mesa ---
-            tableGroup = new THREE.Group();
-            tableGroup.position.set(0, tableSurfaceY, -1.5); // Posición de la mesa en el mundo
-            scene.add(tableGroup);
-            console.log("Table group creado.");
+            // --- Cubo Azul ---
+            const geometry = new THREE.BoxGeometry(0.2, 0.2, 0.2);
+            const material = new THREE.MeshStandardMaterial({ color: 0x0000ff });
+            cubeMesh = new THREE.Mesh(geometry, material);
+            cubeMesh.position.set(0, 0, -1.5); // Posicionar relativo al playerGroup
+            playerGroup.add(cubeMesh);
+            console.log("Cubo azul creado.");
 
-            // --- Crear Visuales de la Mesa ---
-            createTableSurfaceVisualOnly(tableGroup);
-            createCushionsAndFrameVisualsOnly(tableGroup);
-
-            // --- Crear LAS TRES BOLAS (Visual + Propiedad Velocity) ---
-            createBallsManualPhysics(tableGroup);
-
-            // --- Configurar Mandos (Visual y asignación de roles) ---
-            setupControllers(); // Añade mandos al playerGroup
-
-            // --- Crear Slider 3D --- (Se hace dentro de setupControllers)
-
-            // Configurar Sonido
-            setupSound();
+            // --- Configurar Mandos (Solo visual) ---
+            setupControllerVisuals(); // Solo añade los modelos visuales
 
             // --- Event Listeners ---
             window.addEventListener('resize', onWindowResize, false);
@@ -213,219 +90,114 @@
             console.log("Inicialización completa.");
         }
 
-        // --- Función para crear solo la superficie visual ---
-        function createTableSurfaceVisualOnly(group) { /* ... (igual que antes) ... */ }
-        // --- Función para crear cojines y marco (SOLO VISUAL) ---
-        function createCushionsAndFrameVisualsOnly(group) { /* ... (igual que antes) ... */ }
-        // --- Función para crear LAS TRES bolas (Visual + Velocity) ---
-        function createBallsManualPhysics(targetGroup) { /* ... (igual que antes) ... */ }
-
-        // --- Setup Controllers (Asignar roles y añadir a playerGroup) ---
-        function setupControllers() {
-             console.log("  [setupControllers] Configurando mandos...");
+        // --- Setup Controllers (Solo Visual) ---
+        function setupControllerVisuals() {
+             console.log("Configurando visuales de mandos...");
              const controllerModelFactory = new XRControllerModelFactory();
 
              // Controller 1 (Izquierda)
-             const controller1 = renderer.xr.getController(0); // Obtener referencia local
-             if (controller1) {
-                  controller1.addEventListener('selectstart', onSelectStart);
-                  controller1.addEventListener('selectend', onSelectEnd);
+             const controllerGrip1 = renderer.xr.getControllerGrip(0);
+             if (controllerGrip1) {
+                 controllerGrip1.add(controllerModelFactory.createControllerModel(controllerGrip1));
+                 playerGroup.add(controllerGrip1); // Añadir grip al playerGroup
+                 console.log("Visual Mando 1 añadido.");
+             } else { console.warn("No se pudo obtener grip 1"); }
+             const controller1 = renderer.xr.getController(0);
+              if (controller1) {
                   playerGroup.add(controller1);
-                  // moveController = controller1; // No asignar globalmente para input
-                  const controllerGrip1 = renderer.xr.getControllerGrip(0);
-                  if (controllerGrip1) {
-                      controllerGrip1.add(controllerModelFactory.createControllerModel(controllerGrip1));
-                      playerGroup.add(controllerGrip1);
-                  }
-                  // console.log("    Mando 1 (Izquierda) configurado.");
-             } else { console.error("¡No se pudo obtener el Controller 1!"); }
+                  const lineMaterial = new THREE.LineBasicMaterial({ color: 0xcccccc });
+                  const lineGeometry = new THREE.BufferGeometry().setFromPoints([ new THREE.Vector3(0, 0, 0), new THREE.Vector3(0, 0, -0.2) ]);
+                  const line1 = new THREE.Line(lineGeometry, lineMaterial);
+                  controller1.add(line1);
+              }
+
 
              // Controller 2 (Derecha)
-             const controller2 = renderer.xr.getController(1); // Obtener referencia local
+             const controllerGrip2 = renderer.xr.getControllerGrip(1);
+              if (controllerGrip2) {
+                 controllerGrip2.add(controllerModelFactory.createControllerModel(controllerGrip2));
+                 playerGroup.add(controllerGrip2); // Añadir grip al playerGroup
+                 console.log("Visual Mando 2 añadido.");
+             } else { console.warn("No se pudo obtener grip 2"); }
+              const controller2 = renderer.xr.getController(1);
              if (controller2) {
-                  controller2.addEventListener('selectstart', onSelectStart);
-                  controller2.addEventListener('selectend', onSelectEnd);
                   playerGroup.add(controller2);
-                  cueController = controller2; // Asignar para disparo
-                  // rotateController = controller2; // No asignar globalmente para input
-                  const controllerGrip2 = renderer.xr.getControllerGrip(1);
-                   if (controllerGrip2) {
-                      controllerGrip2.add(controllerModelFactory.createControllerModel(controllerGrip2));
-                      playerGroup.add(controllerGrip2);
-                  }
-                  // Taco
-                  const cueLength = 1.2;
-                  const cueRadius = 0.01;
-                  const cueGeometry = new THREE.CylinderGeometry(cueRadius, cueRadius * 0.8, cueLength, 16);
-                  const cueMaterial = new THREE.MeshStandardMaterial({ color: 0xdeb887, roughness: 0.5 });
-                  cueStickMesh = new THREE.Mesh(cueGeometry, cueMaterial);
-                  cueStickMesh.position.set(0, 0, -cueLength / 2 + 0.05);
-                  cueStickMesh.rotation.set(Math.PI / 2, 0, 0);
-                  cueStickMesh.castShadow = true;
-                  controller2.add(cueStickMesh);
-                  // Línea de Mira
-                  const aimLineMaterial = new THREE.LineBasicMaterial({ color: 0xff00ff });
-                  const points = [new THREE.Vector3(0, 0, 0), new THREE.Vector3(0, 0, -1)];
-                  const aimLineGeometry = new THREE.BufferGeometry().setFromPoints(points);
-                  aimLine = new THREE.Line(aimLineGeometry, aimLineMaterial);
-                  aimLine.visible = false;
-                  controller2.add(aimLine);
-                  // Slider 3D
-                  sliderGroup3D = new THREE.Group();
-                  sliderGroup3D.visible = false;
-                  const sliderBGGeom = new THREE.PlaneGeometry(sliderWidth, sliderHeight);
-                  const canvas = document.createElement('canvas');
-                  canvas.width = 256; canvas.height = 32;
-                  const ctx = canvas.getContext('2d');
-                  const gradient = ctx.createLinearGradient(0, 0, canvas.width, 0);
-                  gradient.addColorStop(0, 'green'); gradient.addColorStop(0.5, 'yellow'); gradient.addColorStop(1, 'red');
-                  ctx.fillStyle = gradient; ctx.fillRect(0, 0, canvas.width, canvas.height);
-                  const sliderBGTexture = new THREE.CanvasTexture(canvas);
-                  const sliderBGMat = new THREE.MeshBasicMaterial({ map: sliderBGTexture, transparent: true, opacity: 0.8 });
-                  sliderBackground = new THREE.Mesh(sliderBGGeom, sliderBGMat);
-                  sliderGroup3D.add(sliderBackground);
-                  const handleGeom = new THREE.BoxGeometry(handleSize, handleSize * 1.5, handleSize * 0.5);
-                  const handleMat = new THREE.MeshBasicMaterial({ color: 0xffffff });
-                  sliderHandle = new THREE.Mesh(handleGeom, handleMat);
-                  sliderHandle.position.z = 0.01;
-                  sliderGroup3D.add(sliderHandle);
-                  sliderGroup3D.position.set(0, 0.05, -0.2);
-                  sliderGroup3D.rotation.set(-Math.PI / 6, 0, 0);
-                  controller2.add(sliderGroup3D);
-                  // console.log("    Mando 2 (Derecha/Disparo/Rotación) configurado.");
-             } else { console.error("¡No se pudo obtener el Controller 2!"); }
-             console.log("  [setupControllers] completado.");
+                  const sphereGeo = new THREE.SphereGeometry(0.03);
+                  const sphereMat = new THREE.MeshBasicMaterial({color: 0xff8800});
+                  const sphere = new THREE.Mesh(sphereGeo, sphereMat);
+                  controller2.add(sphere);
+             }
+
+             console.log("Visuales de mandos configurados.");
          }
 
-        // --- Función para crear el Slider Dinámico (HTML) - Eliminada ---
-
-        // --- Función para configurar Sonido ---
-        function setupSound() { /* ... (igual que antes) ... */ }
-
-        // --- WebXR Event Handlers (Manejar aiming y disparo + Activar Audio) ---
-        function onSelectStart(event) {
-             const controller = event.target;
-             // Log gamepad en evento
-             // console.log(`DEBUG onSelectStart - Gamepad controller ${controller === renderer.xr.getController(0) ? '1' : '2'}:`, controller.gamepad);
-             if (controller === cueController && !isStrokeInProgress) {
-                 isTriggerDown = true;
-                 isAiming = true;
-                 if (sliderGroup3D) sliderGroup3D.visible = true;
-                 if (aimLine) aimLine.visible = false;
-                 if (!audioInitialized && typeof Tone !== 'undefined' && Tone.context.state !== 'running') {
-                     console.log("Intentando iniciar Audio Context...");
-                     Tone.start().then(() => { audioInitialized = true; console.log("Audio Context iniciado."); }).catch(e => console.error("Error al iniciar Tone.js:", e));
-                 }
-             }
-        }
-        function onSelectEnd(event) {
-             const controller = event.target;
-             if (controller === cueController && isTriggerDown) {
-                 isTriggerDown = false;
-                 if (isAiming) {
-                     isAiming = false;
-                     if (sliderGroup3D) sliderGroup3D.visible = false;
-                     shootBallManual(currentSliderValue);
-                 }
-             }
-        }
-
-        // --- Billiards Logic Functions (shootBallManual ACEPTA VELOCIDAD) ---
-        function shootBallManual(initialSpeedSlider) { /* ... (igual que antes) ... */ }
-
-        // --- Window Resize Handler ---
-        function onWindowResize() { /* ... (igual que antes) ... */ }
-
-        // --- Función para reproducir Sonido ---
-        function playSound(synth, velocity, maxVelocity, type) { /* ... (igual que antes) ... */ }
-
-        // --- Función para manejar Input de Mandos (SOLO ROTACIÓN JUGADOR + LOGS DETALLADOS) ---
+        // --- Función para manejar Input de Mandos (DESDE InputSources) ---
         function handleControllerInput(delta) { // delta es timeStep fijo
             let ry = 0; // Rotación Y
             const deadzone = 0.1;
+            let rightHandInputSource = null;
 
-            // console.log("handleControllerInput llamado");
+            // Obtener la sesión XR actual
+            const session = renderer.xr.getSession();
+            if (!session) return; // Salir si no hay sesión
 
-            // ***** CAMBIO: Obtener controller 2 directamente aquí *****
-            const rotateController = renderer.xr.getController(1);
-            // *******************************************************
+            // Iterar sobre las fuentes de entrada (mandos)
+            for (const source of session.inputSources) {
+                // Identificar el mando derecho
+                if (source.handedness === 'right') {
+                    rightHandInputSource = source;
+                    break; // Salir del bucle una vez encontrado
+                }
+            }
 
-            // --- Rotación (Mando Derecho - controller2) ---
-             if (rotateController) {
-                 // Comprobar si el gamepad está listo y tiene ejes
-                 if (rotateController.gamepad && Array.isArray(rotateController.gamepad.axes)) {
-                     const axes = rotateController.gamepad.axes;
-                     // Loguear siempre los ejes si el gamepad está listo
-                     console.log(`DEBUG Mando Der (Rotate): Gamepad OK. Axes = [${axes.map(a => a?.toFixed(2) ?? 'N/A').join(', ')}]`);
+            // --- Rotación (Mando Derecho) ---
+             if (rightHandInputSource) {
+                 if (rightHandInputSource.gamepad) { // Comprobar si el gamepad está listo
+                     const axes = rightHandInputSource.gamepad.axes;
+                     // Loguear siempre el array de ejes si existe el gamepad
+                     if (axes) {
+                        console.log(`DEBUG Mando Der (InputSource): Gamepad OK. Axes = [${axes.map(a => a?.toFixed(2) ?? 'N/A').join(', ')}]`);
 
-                     // Intentar leer el eje 2 para rotación
-                     if (axes.length >= 3) {
-                         const joystickX = axes[2] || 0;
-                         if (Math.abs(joystickX) > deadzone + 0.05) {
-                             ry = -joystickX;
-                         }
+                        // Intentar leer el eje 2 para rotación
+                        if (axes.length >= 3) {
+                            const joystickX = axes[2] || 0;
+                            if (Math.abs(joystickX) > deadzone + 0.05) {
+                                ry = -joystickX;
+                                // console.log(`DEBUG: Rotación detectada ry = ${ry.toFixed(3)} (joystickX = ${joystickX.toFixed(3)})`);
+                            }
+                        } else {
+                            // console.log("DEBUG Mando Der (InputSource): Axes array no tiene índice 2.");
+                        }
                      } else {
-                         // console.log("DEBUG Mando Der (Rotate): Axes array no tiene índice 2.");
+                         // console.log("DEBUG Mando Der (InputSource): Gamepad existe, pero axes es null/undefined.");
                      }
                  } else {
-                      // console.log(`DEBUG Mando Der (Rotate): Gamepad ${rotateController.gamepad ? 'existe pero axes no es array válido' : 'NO disponible'}.`);
+                      // console.log("DEBUG Mando Der (InputSource): Gamepad NO disponible.");
                  }
              } else {
-                 // console.log("DEBUG: No se pudo obtener controller 2 en handleInput.");
+                 // console.log("DEBUG: No se encontró InputSource para mano derecha.");
              }
 
             // --- Aplicar Rotación al Player Rig ---
             if (playerGroup && ry !== 0) {
                 playerGroup.rotation.y += ry * rotateSpeed * delta;
-                 console.log(`DEBUG: Aplicando rotación ry = ${ry.toFixed(3)}`); // Log cuando se aplica rotación
+                // console.log(`DEBUG: Rotando playerGroup.rotation.y = ${playerGroup.rotation.y.toFixed(3)}`);
             }
         }
 
+        // --- Window Resize Handler ---
+        function onWindowResize() {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+         }
 
-        // --- Animation Loop (FÍSICA MANUAL + SLIDER + SONIDO + COLISIÓN MEJORADA + ROTACIÓN JUGADOR) ---
+        // --- Animation Loop ---
         function animate() {
-            const elapsedTime = performance.now() / 1000; // Tiempo para oscilación
-
             // --- Manejar Input de Mandos (SOLO ROTACIÓN) ---
             if (renderer.xr.isPresenting) {
                  try { handleControllerInput(timeStep); } catch (e) { console.error("Error en handleControllerInput:", e); } // Pasar timeStep fijo
             }
-
-            // Actualizar Slider 3D si estamos apuntando
-            if (isAiming && sliderGroup3D && sliderHandle) {
-                const oscillation = (Math.sin(elapsedTime * oscillationSpeed) + 1) / 2;
-                currentSliderValue = minSliderValue + oscillation * (maxSliderValue - minSliderValue);
-                const handleX = -sliderWidth / 2 + oscillation * sliderWidth;
-                sliderHandle.position.x = handleX;
-                if (!sliderGroup3D.visible) sliderGroup3D.visible = true;
-            } else if (sliderGroup3D) {
-                if (sliderGroup3D.visible) sliderGroup3D.visible = false;
-            }
-
-            // Actualizar Línea de Mira
-            if (cueController && cueStickMesh && aimLine && renderer.xr.isPresenting) {
-                 try {
-                     tipLocalOffset.set(0, 0, -cueStickMesh.geometry.parameters.height + 0.02);
-                     farPointLocal.copy(aimDirectionLocal).multiplyScalar(5);
-                     const positions = aimLine.geometry.attributes.position;
-                     positions.setXYZ(0, tipLocalOffset.x, tipLocalOffset.y, tipLocalOffset.z);
-                     positions.setXYZ(1, farPointLocal.x, farPointLocal.y, farPointLocal.z);
-                     positions.needsUpdate = true;
-                     aimLine.geometry.computeBoundingSphere();
-                     aimLine.visible = !isAiming;
-                 } catch (e) { if(aimLine) aimLine.visible = false; }
-             } else if (aimLine) {
-                 aimLine.visible = false;
-             }
-
-
-            // --- Actualizar Física Manual ---
-            let allStopped = true;
-            balls.forEach(ball => { /* ... (misma lógica que antes) ... */ });
-            // --- Lógica de Colisión Bola-Bola Mejorada ---
-            for (let i = 0; i < balls.length; i++) { /* ... (misma lógica que antes) ... */ }
-            // --- Comprobar fin de tiro ---
-            if (isStrokeInProgress && allStopped) { /* ... (misma lógica que antes) ... */ }
 
             // Render Scene
             try {
