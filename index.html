@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
     <meta charset="utf-8">
-    <title>WebXR Test - Rotación Joystick v2</title> <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>WebXR Test - Rotación Joystick v3</title> <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
     <style>
         body { margin: 0; overflow: hidden; font-family: monospace; background-color: #000; }
         canvas { display: block; }
@@ -41,7 +41,7 @@
 
         // --- Initialization ---
         function init() {
-            console.log("Iniciando Test Rotación Joystick v2..."); // Log actualizado
+            console.log("Iniciando Test Rotación Joystick v3..."); // Log actualizado
 
             scene = new THREE.Scene();
             camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 100);
@@ -116,31 +116,35 @@
              console.log("Mandos configurados.");
          }
 
-        // --- Función para manejar Input de Mandos (SOLO ROTACIÓN JUGADOR + LOGS MÁS DETALLADOS) ---
+        // --- Función para manejar Input de Mandos (CON LOGS MÁS ROBUSTOS) ---
         function handleControllerInput(delta) { // delta es timeStep fijo
             let ry = 0; // Rotación Y
             const deadzone = 0.1;
 
-            // console.log("handleControllerInput llamado"); // Log para ver si entra
+            // console.log("handleControllerInput llamado"); // Descomentar si es necesario
 
             // --- Rotación (Mando Derecho - controller2) ---
              if (rotateController) {
-                 // ***** CAMBIO: Comprobar gamepad y loguear siempre si existe *****
+                 // ***** CAMBIO: Comprobación más robusta y log siempre *****
                  if (rotateController.gamepad) {
                      const axes = rotateController.gamepad.axes;
                      // Loguear siempre el array de ejes si existe el gamepad
-                     console.log(`DEBUG Mando Der (Rotate): Gamepad OK. Axes = [${axes?.map(a => a?.toFixed(2) ?? 'N/A').join(', ')}]`);
+                     if (axes) { // Comprobar si axes no es null/undefined
+                        console.log(`DEBUG Mando Der (Rotate): Gamepad OK. Axes = [${axes.map(a => a?.toFixed(2) ?? 'N/A').join(', ')}]`);
 
-                     // Intentar leer el eje 2 para rotación (índice común para joystick X derecho)
-                     if (axes && axes.length >= 3) { // Asegurarse de que el índice 2 existe
-                         const joystickX = axes[2] || 0;
-                         // Aplicar zona muerta para la rotación real
-                         if (Math.abs(joystickX) > deadzone + 0.05) {
-                             ry = -joystickX; // Invertido para que derecha rote a la derecha (sentido horario)
-                             // console.log(`DEBUG: Rotación detectada ry = ${ry.toFixed(3)} (joystickX = ${joystickX.toFixed(3)})`);
-                         }
+                        // Intentar leer el eje 2 para rotación (índice común para joystick X derecho)
+                        if (axes.length >= 3) { // Asegurarse de que el índice 2 existe
+                            const joystickX = axes[2] || 0;
+                            // Aplicar zona muerta para la rotación real
+                            if (Math.abs(joystickX) > deadzone + 0.05) {
+                                ry = -joystickX; // Invertido para que derecha rote a la derecha (sentido horario)
+                                // console.log(`DEBUG: Rotación detectada ry = ${ry.toFixed(3)} (joystickX = ${joystickX.toFixed(3)})`);
+                            }
+                        } else {
+                            console.log("DEBUG Mando Der (Rotate): Axes array no tiene índice 2.");
+                        }
                      } else {
-                         // console.log("DEBUG Mando Der (Rotate): Axes array no válido o incompleto.");
+                         console.log("DEBUG Mando Der (Rotate): Gamepad existe, pero axes es null/undefined.");
                      }
                  } else {
                       // Log si el mando existe pero el gamepad no está disponible
